@@ -1,0 +1,12 @@
+.test {
+  letter-spacing: 30px;
+  color: orange;
+}
+
+.centered {
+  text-align: center;
+}
+
+p {
+  padding: 100pt;
+}
