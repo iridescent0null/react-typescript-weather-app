@@ -1,4 +1,4 @@
-type ResultProps = {
+export type ResultProps = {
     results: {
         country: string;
         cityName: string;
@@ -10,7 +10,7 @@ type ResultProps = {
 
 const Results = (props: ResultProps) => {
     return (
-        <div>
+        <>
                 {props.results.country && 
                 <div>
                     <div>{props.results.country}</div>
@@ -22,9 +22,7 @@ const Results = (props: ResultProps) => {
                     <div>{props.results.conditionText}</div>
                 </div>
                 }
-        </div>
-
-        
+        </>
     );
 };
 
