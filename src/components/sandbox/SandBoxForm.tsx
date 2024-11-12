@@ -122,6 +122,7 @@ const SandBoxForm = (props: SandBoxProps) => {
         y: number;
     }
 
+    // @ts-ignore
     interface NamedVector { // assignable to Vector2D
         name: string;
         x: number;
@@ -133,14 +134,17 @@ const SandBoxForm = (props: SandBoxProps) => {
     }
 
     const namedVector = {name: "Jane", x: 1, y:2};
+    // @ts-ignore
     const length = calculateLength(namedVector); // OK because namedVector objects are assignable to Vector2D
 
+    // @ts-ignore
     interface Vector3D extends Vector2D{
         z: number;
     }    
 
     // Types are open, meaning TypeScript cannot catch problems using redundant or questionable propaerties 
     const vectorIn3D = {x: 0.5, y: 6, z: 7}
+    // @ts-ignore
     const erroneouslength = calculateLength(vectorIn3D); // checks. TypeScript doesn't care higher dimension indicated by the additional property, z
 
 
@@ -164,6 +168,7 @@ const SandBoxForm = (props: SandBoxProps) => {
     // calculateLengthOfBrandedVector(vectorIn3D); // error
     // calculateLengthOfBrandedVector({x: 0.5, y: 6, z: 7, _brand:'3d'}); error 
 
+    // @ts-ignore
     const maliciousVector = {x: 0.5, y: 6, z: 7, _brand:'2d'};
     //calculateLengthOfBrandedVector(maliciousVector); also error: _brand's type is string, not 2d literal
     
@@ -171,20 +176,25 @@ const SandBoxForm = (props: SandBoxProps) => {
     
 
     type AbsolutePath = string & {_brand: 'abs'};
+    // @ts-ignore
     type RelativePath = string & {_brand: 'rlt'};
+    // @ts-ignore
     type Meters = number & {_brand: 'meters'};
+    // @ts-ignore
     type Liters = number & {_brand: 'liters'};
 
     function isAbsolutePath(path: string): path is AbsolutePath  {
         return path.startsWith('/'); // does this work for Windows enviroments?
     }
 
+    // @ts-ignore
     function getFile (path: AbsolutePath) {
         // do something
     }
 
     // getFile('my computer'); error
 
+    // @ts-ignore
     function getFileIfAbsPath (path: string) {
         if (isAbsolutePath(path)) {
             getFile(path); // now path is AbsolutePath
@@ -214,9 +224,12 @@ const SandBoxForm = (props: SandBoxProps) => {
             text: string,
             onClick: Function
         }
+
+        // @ts-ignore
         function makeButton(obj: ButtunArgument) {
             // do something
         }
+        // @ts-ignore
         class NaiveResetButton {
             onClick() {
                 alert(`${this}`); // printing undefined...
@@ -226,6 +239,7 @@ const SandBoxForm = (props: SandBoxProps) => {
             }
         }
 
+        // @ts-ignore
         class SophisticatedResetButton {
             onClick() {
                 alert(`${this}`); // same as the former one
@@ -237,6 +251,7 @@ const SandBoxForm = (props: SandBoxProps) => {
                 this.onClick = this.onClick.bind(this);
             }
         }
+        // @ts-ignore
         class AnotherExpressionResetButton {
             render() {
                 return makeButton({text: 'Reset', onClick: this.onClick});
@@ -261,16 +276,18 @@ const SandBoxForm = (props: SandBoxProps) => {
         //declare let el: HTMLElement; declare cannot exist in a component function
         // ref: https://stackoverflow.com/questions/73732791/modifiers-cannot-appear-here-ts1184-error-while-using-getstaticprops-in-nextjs
         if (0) { // this area cause runtime error, then suppress
+            // @ts-ignore
             addKeyListener(el, function(e){
                 // "this" is HTMLElement here!
                 this.innerHTML;
             });
         }
-
+        // @ts-ignore
         class Foo {
             registerHandler(el: HTMLElement) {
                 addKeyListener(el,
                     // e => { this.innerHTML;} // with arrow function, the this doesn't remain!
+                    // @ts-ignore
                     function(e){this.innerHTML}
                 );
             }
