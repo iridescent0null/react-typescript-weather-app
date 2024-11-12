@@ -5,7 +5,9 @@ import NicoForm from "./components/niconico/NicoForm"
 import Results from "./components/Results"
 import {ResultProps} from "./components/Results"
 import Loading from "./components/Loading"
+import YoutubeForm from "./components/youtube/YoutubeForm"
 import Config from "./Config" // This guy's source code should not be commited! 
+import SandBoxForm from "./components/sandbox/SandBoxForm"
 
 const App = () => {
 
@@ -62,6 +64,10 @@ const App = () => {
     .then(() => alert("request for wether information failed"));
   }
 
+  // SandBox Part
+  const [birthDate, setBirthDate] = useState<Date | undefined>();
+
+  // FIXME default input (yyyy/mm/dd) causes today designation
   return (
     <div className ="centered">
       <div className="form-wrapper">
@@ -72,6 +78,12 @@ const App = () => {
       <div className="form-wrapper">
         <div>Sadly the nico APIs are not working...</div>
         <NicoForm testData=""  keywords={keywords} setKeywords={setKeywords} findMovie={findMovie}/>
+      </div>
+      <div className="form-wrapper">
+        <YoutubeForm/>
+      </div>
+      <div className="form-wrapper">
+        <SandBoxForm birthDate={birthDate} age={null} setBirthDate={setBirthDate}/>        
       </div>
     </div>
   )
