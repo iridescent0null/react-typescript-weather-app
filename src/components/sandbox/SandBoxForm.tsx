@@ -1,17 +1,17 @@
 import { useState } from "react"
 
 type SandBoxProps = {
-    setBirthDate: any
+    setBirthDate: any,
     birthDate: Date | undefined,
     age: number | null
 }
 
-const formPrettyDate = (date :Date) => {
-    return date.getFullYear() + "/" + (date.getMonth()+1) +"/"+date.getDate();
+const formPrettyDate = (date: Date) => {
+    return date.getFullYear() + "/" + (date.getMonth()+1) + "/" + date.getDate();
 };
 
 // I bet this is a reinvention of wheel...
-const formPrrettyDayOfWeek = (date :Date | null) =>{
+const formPrettyDayOfWeek = (date: Date | null) =>{
     if (!date) {
         return "";
     }
@@ -42,7 +42,7 @@ const SandBoxForm = (props: SandBoxProps) => {
         e.preventDefault();
         console.log(birthDate);
         conductCalculateAge(birthDate);
-    }
+    };
 
     const conductCalculateAge = (birthDate: Date | null) => {
 
@@ -72,14 +72,16 @@ const SandBoxForm = (props: SandBoxProps) => {
         setBirthDate(birthDate);
         setShownBirthDate(birthDate);
         return age;
-    }
+    };
 
     return (
     <>
         <div>
             <strong>-- Sand Box Area --</strong>
         </div>
+        <div>Age calculation</div>
         <form onSubmit={calculateAge}>
+            <span>birthday: </span>
             <input type="Date" onChange={e => {if(e.target.valueAsDate) {setBirthDate(e.target.valueAsDate);} props.setBirthDate(e.target.valueAsDate);}} /><button type="submit" > do! </button>
         </form>
 
@@ -95,7 +97,7 @@ const SandBoxForm = (props: SandBoxProps) => {
                 <tr> 
                     <th>birth</th>
                     <th>{shownBirthDate? formPrettyDate(shownBirthDate):"xxxx/yy/zz"}</th> 
-                    <th>{formPrrettyDayOfWeek(birthDate)}</th>
+                    <th>{formPrettyDayOfWeek(birthDate)}</th>
                 </tr>
                 <tr>
                     <th>age</th>
@@ -109,7 +111,6 @@ const SandBoxForm = (props: SandBoxProps) => {
                 </tr>
             </tfoot>
         </table>
-        
     </>
     )
 };
