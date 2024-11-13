@@ -3,11 +3,12 @@ import Title from "./components/Title"
 import Form from "./components/Form"
 import NicoForm from "./components/niconico/NicoForm" 
 import Results from "./components/Results"
-import {ResultProps} from "./components/Results"
+import { ResultProps } from "./components/Results"
 import Loading from "./components/Loading"
 import YoutubeForm from "./components/youtube/YoutubeForm"
 import Config from "./Config" // This guy's source code should not be commited! 
 import SandBoxForm from "./components/sandbox/SandBoxForm"
+import { UndefiableDate } from "./components/sandbox/SandBoxForm"
 
 const App = () => {
 
@@ -65,7 +66,7 @@ const App = () => {
   }
 
   // SandBox Part
-  const [birthDate, setBirthDate] = useState<Date | undefined>();
+  const [birthDate, setBirthDate] = useState<UndefiableDate>();
 
   // FIXME default input (yyyy/mm/dd) causes today designation
   return (

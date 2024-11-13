@@ -1,8 +1,9 @@
 import { useState } from "react"
 
+type UndefiableDate = Date | undefined; // TODO lousy?
 type SandBoxProps = {
-    setBirthDate: any,
-    birthDate: Date | undefined,
+    setBirthDate: React.Dispatch<React.SetStateAction<UndefiableDate>>,
+    birthDate: UndefiableDate,
     age: number | null
 }
 
@@ -11,7 +12,7 @@ const formPrettyDate = (date: Date) => {
 };
 
 // I bet this is a reinvention of wheel...
-const formPrettyDayOfWeek = (date: Date | null) =>{
+const formPrettyDayOfWeek = (date: UndefiableDate) =>{
     if (!date) {
         return "";
     }
@@ -34,19 +35,20 @@ const formPrettyDayOfWeek = (date: Date | null) =>{
 } 
 
 const SandBoxForm = (props: SandBoxProps) => {
-    const [birthDate, setBirthDate] = useState<Date>(new Date);
+    console.log(props);
+    const [birthDate, setBirthDate] = useState<Date>();
     const [age, setAge] = useState<number>();
     const [shownBirthDate, setShownBirthDate] = useState<Date>(); // redundant?
 
     const calculateAge = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        console.log(birthDate);
         conductCalculateAge(birthDate);
     };
 
-    const conductCalculateAge = (birthDate: Date | null) => {
+    const conductCalculateAge = (birthDate: UndefiableDate) => {
 
-        if (birthDate == null) {
+        if (!birthDate) {
+            alert("enter your birthday");
             return "";
         }
 
@@ -74,6 +76,14 @@ const SandBoxForm = (props: SandBoxProps) => {
         return age;
     };
 
+    const setIfLegitBirthDate = (date: UndefiableDate) => { 
+        if (!date) {
+            setBirthDate(undefined);
+            return;
+        }
+        setBirthDate(date);
+    }
+
     return (
     <>
         <div>
@@ -82,7 +92,11 @@ const SandBoxForm = (props: SandBoxProps) => {
         <div>Age calculation</div>
         <form onSubmit={calculateAge}>
             <span>birthday: </span>
-            <input type="Date" onChange={e => {if(e.target.valueAsDate) {setBirthDate(e.target.valueAsDate);} props.setBirthDate(e.target.valueAsDate);}} /><button type="submit" > do! </button>
+            <input type="Date" onChange={e => { 
+                        setIfLegitBirthDate(e.target.valueAsDate || undefined);
+                        props.setBirthDate(e.target.valueAsDate || undefined);}
+                    } />
+                <button type="submit" > do! </button>
         </form>
 
         <table>
@@ -97,7 +111,7 @@ const SandBoxForm = (props: SandBoxProps) => {
                 <tr> 
                     <th>birth</th>
                     <th>{shownBirthDate? formPrettyDate(shownBirthDate):"xxxx/yy/zz"}</th> 
-                    <th>{formPrettyDayOfWeek(birthDate)}</th>
+                    <th>{formPrettyDayOfWeek(shownBirthDate)}</th>
                 </tr>
                 <tr>
                     <th>age</th>
@@ -298,3 +312,4 @@ const SandBoxForm = (props: SandBoxProps) => {
 declare let el: HTMLElement;
 
 export default SandBoxForm;
+export type { UndefiableDate };
