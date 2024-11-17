@@ -5,7 +5,7 @@ import NicoForm from "./components/niconico/NicoForm"
 import Results from "./components/Results"
 import { ResultProps } from "./components/Results"
 import Loading from "./components/Loading"
-import YoutubeForm from "./components/youtube/YoutubeForm"
+import YoutubeForm, { YoutubeProps } from "./components/youtube/YoutubeForm"
 import Config from "./Config" // This guy's source code should not be commited! 
 import SandBoxForm from "./components/sandbox/SandBoxForm"
 import { UndefiableDate } from "./components/sandbox/SandBoxForm"
@@ -65,10 +65,12 @@ const App = () => {
     .then(() => alert("request for wether information failed"));
   }
 
+  // Youtube Part
+  const [youtubeProps, setYoutubeProps] = useState<YoutubeProps>(); //? why we can achieve the search task without the setter?
+
   // SandBox Part
   const [birthDate, setBirthDate] = useState<UndefiableDate>();
 
-  // FIXME default input (yyyy/mm/dd) causes today designation
   return (
     <div className ="centered">
       <div className="form-wrapper">
@@ -81,7 +83,7 @@ const App = () => {
         <NicoForm testData=""  keywords={keywords} setKeywords={setKeywords} findMovie={findMovie}/>
       </div>
       <div className="form-wrapper">
-        <YoutubeForm/>
+        <YoutubeForm input={youtubeProps?youtubeProps.input:""} />
       </div>
       <div className="form-wrapper">
         <SandBoxForm birthDate={birthDate} age={null} setBirthDate={setBirthDate}/>        

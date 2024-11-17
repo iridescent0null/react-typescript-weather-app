@@ -15,6 +15,9 @@ type Video = { //TODO not exact yet
     }
 }
 
+/** valid options in YouTube search */
+type ItemType = "video" | "channel" | "playlist";
+ 
 type SearchResponse = {
     kind: string,
     etag: string,
@@ -33,26 +36,24 @@ type Result = {
 }
 
 type YoutubeProps = {
-
+    input: string
 }
 
 const YoutubeForm = (props: YoutubeProps) => {
 
     const [result, setResult] = useState<Result>();
+    const soughtItemType: ItemType = "video"; // TODO make choosable
 
-    // dummy id and search keyword for dev 
+    // dummy id for dev 
     const randomIdInTHeGooglesExpamle = "7lCDEYXw3mM"; //FIXME remove
-    const randomSearchKeyword = "テイエムオペラオー"; //FIXME remove
 
-    const apiEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&query=${randomSearchKeyword}&id=${randomIdInTHeGooglesExpamle}`;
-    const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${randomSearchKeyword}`;
+    const apiEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&id=${randomIdInTHeGooglesExpamle}`;
+    const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}`;
 
     /**
      * when it is true, http request will get quenched 
      */
     const gateKeeper = false;
-
-    const keyword = randomSearchKeyword; // FIXME use the user input 
 
     const getMovies = (e: React.FormEvent<HTMLFormElement>) => {
 
@@ -122,6 +123,7 @@ const YoutubeForm = (props: YoutubeProps) => {
 };
 
 export default YoutubeForm;
+export type { YoutubeProps };
 
 //actual response example 
 /**
