@@ -2,7 +2,7 @@ import { useState } from "react"
 // import { PlayerState } from "youtube" // for some reason such import is not needed and can't be done (error)
 import Config from "../../Config"
 
-type Video = { //TODO not exact yet
+type FoundVideo = { //TODO not exact yet
     id: {
         kind: string,
         videoId: string 
@@ -15,39 +15,81 @@ type Video = { //TODO not exact yet
     }
 }
 
+type DetailedVideo = {
+    etag: string,
+    id: string,
+    kind: string,
+    snippet: Snippet
+}
+
+/**
+ * Thumbnail image url
+ */
+type Thumbnail = {
+    height: number,
+    url: string,
+    width: number
+}
+
+type Snippet = {
+    categoryId?: string,
+    channelId?: string,
+    channelTitle?: string,
+    defaultAudioLanguage?: string,
+    description: string,
+    localized?:{
+        description: string,
+        title: string
+    }
+    publishedAt: Date,
+    thumbnails: Thumbnail[]
+    title: string
+}
+
 /** valid options in YouTube search */
 type ItemType = "video" | "channel" | "playlist";
  
+type PageInfo = {
+    totalResults: number,//number of the videos
+    resultsPerPage: number
+}
 type SearchResponse = {
     kind: string,
     etag: string,
     netxPageToken?: string,
     regionCode: string, // TODO more precise type?
-    pageInfo: {
-        totalResults: number,//number of the videos
-        resultsPerPage: number
-    },
-    items: Video[]
+    pageInfo: PageInfo,
+    items: FoundVideo[]
 }
 
-type Result = {
-    videos: readonly Video[],
+type VideoResponse = {
+    etag: string,
+    items: DetailedVideo[],
+    kind: string,
+    pageInfo: PageInfo
+}
+
+type SearchResult = {
+    videos: FoundVideo[],
     total: number
 }
 
+type VideoResult = {
+    snippets: Snippet[]
+}
+
 type YoutubeProps = {
+    setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
     input: string
 }
 
 const YoutubeForm = (props: YoutubeProps) => {
-
-    const [result, setResult] = useState<Result>();
+    console.log(props);
+    const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can ve removed?
+    const [videoResult, setVideoResult] = useState<VideoResult>();
     const soughtItemType: ItemType = "video"; // TODO make choosable
 
-    // dummy id for dev 
-    const randomIdInTHeGooglesExpamle = "7lCDEYXw3mM"; //FIXME remove
-
-    const apiEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&id=${randomIdInTHeGooglesExpamle}`;
+    const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}`;
 
     /**
@@ -62,60 +104,77 @@ const YoutubeForm = (props: YoutubeProps) => {
             alert("under construction");
             return; 
         } 
+
+        let snippets: Snippet[] = [];
+
         fetch(getSearchEndPoint)
             .then(res =>  res.json())
             .then(json => {
                 console.log(json);
-                const foundVideos: readonly Video[] =  (json as unknown as SearchResponse).items;
+                const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
-                setResult(
+                setSearchResult(
                     {
                         "videos": foundVideos,
                         "total": infos.totalResults
                     }
                 )
+                return foundVideos;
             })
-            .catch(error => console.error(error));
+            .then(videos => {
+                //const snippets: Snippet[] = [];
+                return fetch(getDetailEndPoint + videos[0].id.videoId) //TODO loop //TODO make synch
+                    .then(res => res.json())
+                    .then(json => {
+                        console.log(json);
+                        const detailedVideos: DetailedVideo[] = (json as unknown as VideoResponse).items;
 
-            return;// FIXME remove me to implement the following request
-
-        fetch(apiEndPoint)
-                .then(res => res.json)
-                .then(json => {
-                    const foundVideos: readonly Video[] =  (json as unknown as SearchResponse).items; // TODO looks a little s__tty
-                    const infos = (json as unknown as SearchResponse).pageInfo;
-
-                    setResult(
-                        {
-                            "videos": foundVideos,
-                            "total": infos.totalResults
+                        if (detailedVideos.length > 1) {
+                                console.error("multiple videos found for a id!");
+                                console.log(json);
                         }
+                        console.log(detailedVideos[0].snippet.title);
+                        // snippets.push(detailedVideos[0].snippet);
+                        return detailedVideos[0].snippet;
+                    })
 
-                    )
-                }
-                )
-                .catch(error => {
-                    console.warn(error);
-                    alert("failed");
-                })
-                .finally();
+            })
+            .then(snippet => {
+                snippets.push(snippet);
+            })
+            .then( () => {
+                const newSnippets = [...snippets];
+                console.log(snippets);
+                console.log(newSnippets);
+                setVideoResult(
+                    {
+                        snippets: newSnippets
+                    }
+                );
+            })
+
+            .catch(error => console.error(error));
     }
 
     // TODO very lousy HTML only to check the behavior of Youtube APIs
     return (
     <>
         <form onSubmit={getMovies} >
-            <input/><br/>
+            <input onChange={
+                e => {
+                    props .setYoutubeKeyword(e.target.value);
+                }
+            }/><br/>
             <button type="submit"> search  youtube</button>
             <ul>
-                <li>{result?"video id: "+ result.videos[0].id.videoId:""}</li>
-                <li>{result?"video id: "+ result.videos[1].id.videoId:""}</li>
-                <li>{result?"video id: "+ result.videos[2].id.videoId:""}</li>
-                <li>{result?"video id: "+ result.videos[3].id.videoId:""}</li>
-                <li>{result?"video id: "+ result.videos[4].id.videoId:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"title: "+ videoResult.snippets[0].title:""}</li>
+                <li>{searchResult?"video id: "+ searchResult.videos[1].id.videoId:""}</li>
+                <li>{searchResult?"video id: "+ searchResult.videos[2].id.videoId:""}</li>
+                <li>{searchResult?"video id: "+ searchResult.videos[3].id.videoId:""}</li>
+                <li>{searchResult?"video id: "+ searchResult.videos[4].id.videoId:""}</li>
             </ul>
             <div>
-            {result?"total videos: "+ result.total:""}
+            {searchResult?"total videos: "+ searchResult.total:""}
             </div>
         </form>
     </>

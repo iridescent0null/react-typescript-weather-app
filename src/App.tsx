@@ -66,7 +66,7 @@ const App = () => {
   }
 
   // Youtube Part
-  const [youtubeProps, setYoutubeProps] = useState<YoutubeProps>(); //? why we can achieve the search task without the setter?
+  const [youtubeKeyword, setYoutubeKeyword] = useState<string>(""); // TODO should be array like
 
   // SandBox Part
   const [birthDate, setBirthDate] = useState<UndefiableDate>();
@@ -83,7 +83,7 @@ const App = () => {
         <NicoForm testData=""  keywords={keywords} setKeywords={setKeywords} findMovie={findMovie}/>
       </div>
       <div className="form-wrapper">
-        <YoutubeForm input={youtubeProps?youtubeProps.input:""} />
+        <YoutubeForm input={youtubeKeyword?youtubeKeyword:""} setYoutubeKeyword={setYoutubeKeyword}/>
       </div>
       <div className="form-wrapper">
         <SandBoxForm birthDate={birthDate} age={null} setBirthDate={setBirthDate}/>        
