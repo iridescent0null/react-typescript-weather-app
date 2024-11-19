@@ -2,6 +2,7 @@ import { useState } from "react"
 // import { PlayerState } from "youtube" // for some reason such import is not needed and can't be done (error)
 import Config from "../../Config"
 
+/** object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
     id: {
         kind: string,
@@ -15,6 +16,7 @@ type FoundVideo = { //TODO not exact yet
     }
 }
 
+/** object in responses from ~/video API */
 type DetailedVideo = {
     etag: string,
     id: string,
@@ -22,15 +24,14 @@ type DetailedVideo = {
     snippet: Snippet
 }
 
-/**
- * Thumbnail image url
- */
+/** Thumbnail image url and sizes*/
 type Thumbnail = {
     height: number,
     url: string,
     width: number
 }
 
+/** portion to describe infos about a video in Youtube API responses */
 type Snippet = {
     categoryId?: string,
     channelId?: string,
@@ -53,6 +54,7 @@ type PageInfo = {
     totalResults: number,//number of the videos
     resultsPerPage: number
 }
+/** from ~/search API */
 type SearchResponse = {
     kind: string,
     etag: string,
@@ -61,7 +63,7 @@ type SearchResponse = {
     pageInfo: PageInfo,
     items: FoundVideo[]
 }
-
+/** from ~/video API */
 type VideoResponse = {
     etag: string,
     items: DetailedVideo[],
@@ -73,7 +75,6 @@ type SearchResult = {
     videos: FoundVideo[],
     total: number
 }
-
 type VideoResult = {
     snippets: Snippet[]
 }
@@ -85,27 +86,58 @@ type YoutubeProps = {
 
 const YoutubeForm = (props: YoutubeProps) => {
     console.log(props);
-    const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can ve removed?
+
+    /** 
+     * Call a Youtube API multiple times to translate the video ids to detailed information \
+     * FIXME: this function currently calls the API exactly five times 
+    */
+    async function getAllDetailes (foundVideos: FoundVideo[]) {
+        const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
+        const snippets: Snippet[] = [];
+        return await Promise.all( //FIXME handle non-fixed length!
+            [
+                fetch(requestURLs[0]).then(res=>res.json()),
+                fetch(requestURLs[1]).then(res=>res.json()),
+                fetch(requestURLs[2]).then(res=>res.json()),
+                fetch(requestURLs[3]).then(res=>res.json()),
+                fetch(requestURLs[4]).then(res=>res.json()),
+            ]
+        )
+        .then(responses => {
+            const castReses = (responses as unknown as VideoResponse[]);
+            const videoReses:VideoResponse[]=[];
+            for(let i =0; i < responses.length; i++) {
+                videoReses.push(castReses[i]);
+            }
+            return videoReses;
+        })
+        .then(detailedVideos => {
+            for (let i = 0; i < detailedVideos.length; i++) {
+
+                // TODO length check (normally items' length should be just 1)
+
+                console.log(detailedVideos[i].items[0].snippet.title);
+                snippets.push(detailedVideos[i].items[0].snippet);
+            }
+        })
+        .then(() => snippets);
+    };
+
+    const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can be removed?
     const [videoResult, setVideoResult] = useState<VideoResult>();
     const soughtItemType: ItemType = "video"; // TODO make choosable
-
     const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}`;
 
-    /**
-     * when it is true, http request will get quenched 
-     */
+    /** when it is true, http request will get quenched */
     const gateKeeper = false;
 
-    const getMovies = (e: React.FormEvent<HTMLFormElement>) => {
-
+    const getVideos = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (gateKeeper) {
             alert("under construction");
             return; 
         } 
-
-        let snippets: Snippet[] = [];
 
         fetch(getSearchEndPoint)
             .then(res =>  res.json())
@@ -121,45 +153,22 @@ const YoutubeForm = (props: YoutubeProps) => {
                 )
                 return foundVideos;
             })
-            .then(videos => {
-                //const snippets: Snippet[] = [];
-                return fetch(getDetailEndPoint + videos[0].id.videoId) //TODO loop //TODO make synch
-                    .then(res => res.json())
-                    .then(json => {
-                        console.log(json);
-                        const detailedVideos: DetailedVideo[] = (json as unknown as VideoResponse).items;
-
-                        if (detailedVideos.length > 1) {
-                                console.error("multiple videos found for a id!");
-                                console.log(json);
-                        }
-                        console.log(detailedVideos[0].snippet.title);
-                        // snippets.push(detailedVideos[0].snippet);
-                        return detailedVideos[0].snippet;
-                    })
-
-            })
-            .then(snippet => {
-                snippets.push(snippet);
-            })
-            .then( () => {
-                const newSnippets = [...snippets];
-                console.log(snippets);
-                console.log(newSnippets);
+            .then(videos => getAllDetailes(videos))
+            .then(snippets => {
                 setVideoResult(
                     {
-                        snippets: newSnippets
+                        snippets: snippets
                     }
                 );
             })
-
             .catch(error => console.error(error));
     }
 
     // TODO very lousy HTML only to check the behavior of Youtube APIs
+    // TDDO handle random array length
     return (
     <>
-        <form onSubmit={getMovies} >
+        <form onSubmit={getVideos} >
             <input onChange={
                 e => {
                     props .setYoutubeKeyword(e.target.value);
@@ -168,10 +177,15 @@ const YoutubeForm = (props: YoutubeProps) => {
             <button type="submit"> search  youtube</button>
             <ul>
                 <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"title: "+ videoResult.snippets[0].title:""}</li>
-                <li>{searchResult?"video id: "+ searchResult.videos[1].id.videoId:""}</li>
-                <li>{searchResult?"video id: "+ searchResult.videos[2].id.videoId:""}</li>
-                <li>{searchResult?"video id: "+ searchResult.videos[3].id.videoId:""}</li>
-                <li>{searchResult?"video id: "+ searchResult.videos[4].id.videoId:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[1])?"title: "+ videoResult.snippets[1].title:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[1])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[2])?"title: "+ videoResult.snippets[2].title:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[2])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[3])?"title: "+ videoResult.snippets[3].title:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[3])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[4])?"title: "+ videoResult.snippets[4].title:""}</li>
+                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"channel: "+ videoResult.snippets[4].channelTitle:""}</li>
             </ul>
             <div>
             {searchResult?"total videos: "+ searchResult.total:""}
