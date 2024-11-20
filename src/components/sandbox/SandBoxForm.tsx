@@ -313,3 +313,4 @@ declare let el: HTMLElement;
 
 export default SandBoxForm;
 export type { UndefiableDate };
+export { formPrettyDate };

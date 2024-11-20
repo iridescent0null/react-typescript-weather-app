@@ -44,3 +44,32 @@ th {
 thead th {
   font-weight: bold;
 }
+
+.video-detail {
+  text-align: left;
+}
+
+.video-container {
+  padding: 20px;
+  margin: 5px;
+  background-color: yellowgreen;
+}
+
+.video-detail .description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 3;
+}
+
+.video-detail .title, .video-detail .channel{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.right-btn {
+  width: 10px;
+}

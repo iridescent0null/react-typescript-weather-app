@@ -1,6 +1,8 @@
 import { useState } from "react"
-// import { PlayerState } from "youtube" // for some reason such import is not needed and can't be done (error)
 import Config from "../../Config"
+import VideoDivision from "./VideoDivision"
+
+// TODO remove countless comment lines after tests (depelecation of API quata prevented me from doing that)
 
 /** object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
@@ -31,6 +33,11 @@ type Thumbnail = {
     width: number
 }
 
+// apparently it has following keys: default, high, maxres, medium and standard
+interface Thumbnails {
+    default: Thumbnail
+}
+
 /** portion to describe infos about a video in Youtube API responses */
 type Snippet = {
     categoryId?: string,
@@ -43,9 +50,12 @@ type Snippet = {
         title: string
     }
     publishedAt: Date,
-    thumbnails: Thumbnail[]
+    thumbnails: Thumbnails
     title: string
 }
+
+/** pagenation option (new means to get fresh search result)*/
+type PageDirection = "previous" | "next" | "new";
 
 /** valid options in YouTube search */
 type ItemType = "video" | "channel" | "playlist";
@@ -58,7 +68,8 @@ type PageInfo = {
 type SearchResponse = {
     kind: string,
     etag: string,
-    netxPageToken?: string,
+    nextPageToken?: string,
+    prevPageToken?:string,
     regionCode: string, // TODO more precise type?
     pageInfo: PageInfo,
     items: FoundVideo[]
@@ -125,12 +136,108 @@ const YoutubeForm = (props: YoutubeProps) => {
 
     const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can be removed?
     const [videoResult, setVideoResult] = useState<VideoResult>();
+    const [nextPageToken, setNextPageToken] = useState<string>();
+    const [previousPageToken, setPreviousPageToken] = useState<string>();
+    const [pageDirection,setPageDirection] = useState<PageDirection>("new");
+
     const soughtItemType: ItemType = "video"; // TODO make choosable
     const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}`;
+    const getAnotherPageSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}&pageToken=`;
 
     /** when it is true, http request will get quenched */
     const gateKeeper = false;
+
+    const getVideosPrev = (e: React.FormEvent<HTMLFormElement>) => {
+        // e.preventDefault();
+        // if (gateKeeper) {
+        //     alert("under construction");
+        //     return; 
+        // } 
+        // fetch(getAnotherPageSearchEndPoint + previousPageToken)
+        // .then(res =>  res.json())
+        // .then(json => {
+        //     console.log(json);
+        //     const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
+        //     const infos = (json as unknown as SearchResponse).pageInfo;
+        //     setSearchResult(
+        //         {
+        //             "videos": foundVideos,
+        //             "total": infos.totalResults
+        //         }
+        //     )
+        //     if ((json as unknown as SearchResponse).nextPageToken){
+        //         setNextPageToken(
+        //             (json as unknown as SearchResponse).nextPageToken
+        //         )
+        //     }
+        //     if ((json as unknown as SearchResponse).prevPageToken){
+        //         setPreviousPageToken(
+        //             (json as unknown as SearchResponse).prevPageToken
+        //         )
+        //     }
+        //     return foundVideos;
+        // })
+        // .then(videos => getAllDetailes(videos))
+        // .then(snippets => {
+        //     setVideoResult(
+        //         {
+        //             snippets: snippets
+        //         }
+        //     );
+        // })
+        // .catch(error => console.error(error));
+        setPageDirection("previous");
+        getVideos(e);
+    }
+
+    const getVideosNext = (e: React.FormEvent<HTMLFormElement>) => {
+        // e.preventDefault();
+        // if (gateKeeper) {
+        //     alert("under construction");
+        //     return; 
+        // } 
+        // fetch(getAnotherPageSearchEndPoint + nextPageToken)
+        // .then(res =>  res.json())
+        // .then(json => {
+        //     console.log(json);
+        //     const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
+        //     const infos = (json as unknown as SearchResponse).pageInfo;
+        //     setSearchResult(
+        //         {
+        //             "videos": foundVideos,
+        //             "total": infos.totalResults
+        //         }
+        //     )
+        //     if ((json as unknown as SearchResponse).nextPageToken){
+        //         setNextPageToken(
+        //             (json as unknown as SearchResponse).nextPageToken
+        //         )
+        //     }
+        //     if ((json as unknown as SearchResponse).prevPageToken){
+        //         setPreviousPageToken(
+        //             (json as unknown as SearchResponse).prevPageToken
+        //         )
+        //     }
+        //     return foundVideos;
+        // })
+        // .then(videos => getAllDetailes(videos))
+        // .then(snippets => {
+        //     setVideoResult(
+        //         {
+        //             snippets: snippets
+        //         }
+        //     );
+        // })
+        // .catch(error => console.error(error));
+        setPageDirection("next");
+        getVideos(e);
+    }
+
+    const getNewVideos = (e: React.FormEvent<HTMLFormElement>) => {
+        setPageDirection("new");
+        getVideos(e);
+    }
 
     const getVideos = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -139,7 +246,26 @@ const YoutubeForm = (props: YoutubeProps) => {
             return; 
         } 
 
-        fetch(getSearchEndPoint)
+        // if (pageDirection === "new") {
+        //     getNewVideos(e);
+        //     return;
+        // }
+
+        // if (pageDirection === "previous") {
+        //     getVideosPrev(e);
+        //     return;
+        // }
+
+        // if (pageDirection === "next") {
+        //     getVideosNext(e);
+        //     return;
+        // }
+
+        // throw Error();
+
+        const searchURL = pageDirection === "new"? getSearchEndPoint: pageDirection === "previous"? getAnotherPageSearchEndPoint + previousPageToken: getAnotherPageSearchEndPoint + nextPageToken
+
+        fetch(searchURL) //TODO accept page token if needed
             .then(res =>  res.json())
             .then(json => {
                 console.log(json);
@@ -151,6 +277,19 @@ const YoutubeForm = (props: YoutubeProps) => {
                         "total": infos.totalResults
                     }
                 )
+
+                // TODO resolve lengthy if statements
+                // TODO don't these states inadvertently remain old tokens after new search?
+                if ((json as unknown as SearchResponse).nextPageToken){
+                    setNextPageToken(
+                        (json as unknown as SearchResponse).nextPageToken
+                    )
+                }
+                if ((json as unknown as SearchResponse).prevPageToken){
+                    setPreviousPageToken(
+                        (json as unknown as SearchResponse).prevPageToken
+                    )
+                }
                 return foundVideos;
             })
             .then(videos => getAllDetailes(videos))
@@ -164,32 +303,29 @@ const YoutubeForm = (props: YoutubeProps) => {
             .catch(error => console.error(error));
     }
 
-    // TODO very lousy HTML only to check the behavior of Youtube APIs
-    // TDDO handle random array length
     return (
     <>
-        <form onSubmit={getVideos} >
+        <form onSubmit={getNewVideos} >
             <input onChange={
                 e => {
-                    props .setYoutubeKeyword(e.target.value);
+                    props.setYoutubeKeyword(e.target.value);
                 }
-            }/><br/>
-            <button type="submit"> search  youtube</button>
-            <ul>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"title: "+ videoResult.snippets[0].title:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[1])?"title: "+ videoResult.snippets[1].title:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[1])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[2])?"title: "+ videoResult.snippets[2].title:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[2])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[3])?"title: "+ videoResult.snippets[3].title:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[3])?"channel: "+ videoResult.snippets[0].channelTitle:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[4])?"title: "+ videoResult.snippets[4].title:""}</li>
-                <li>{(videoResult && videoResult.snippets&& videoResult.snippets[0])?"channel: "+ videoResult.snippets[4].channelTitle:""}</li>
-            </ul>
+            } className="form-control"/><br/>
+            <button className="btn btn-success" type="submit"> search  youtube</button>
             <div>
             {searchResult?"total videos: "+ searchResult.total:""}
             </div>
+            <VideoDivision snippet={videoResult? videoResult.snippets[0] : undefined} />
+            <VideoDivision snippet={videoResult? videoResult.snippets[1] : undefined} />
+            <VideoDivision snippet={videoResult? videoResult.snippets[2] : undefined} />
+            <VideoDivision snippet={videoResult? videoResult.snippets[3] : undefined} />
+            <VideoDivision snippet={videoResult? videoResult.snippets[4] : undefined} />     
+        </form>
+        <form onSubmit={getVideosPrev} >
+            {previousPageToken? <button className="btn form-control btn-sm" type="submit"> &#60; PREVIOUS</button>:<span></span>}
+        </form>
+        <form onSubmit={getVideosNext} >
+            {nextPageToken? <button className="btn form-control btn-sm" type="submit"> NEXT &#62; </button>:<span></span>}
         </form>
     </>
     );
@@ -197,61 +333,4 @@ const YoutubeForm = (props: YoutubeProps) => {
 
 export default YoutubeForm;
 export type { YoutubeProps };
-
-//actual response example 
-/**
- * {
-  "kind": "youtube#searchListResponse",
-  "etag": "QlXPURA73uLH8ZTRPBcDQdNiWpk",
-  "nextPageToken": "CAUQAA",
-  "regionCode": "JP",
-  "pageInfo": {
-    "totalResults": 374951,
-    "resultsPerPage": 5
-  },
-  "items": [
-    {
-      "kind": "youtube#searchResult",
-      "etag": "erHEhy6uIyNkwZUiHE1K8PphTVc",
-      "id": {
-        "kind": "youtube#video",
-        "videoId": "k597ABpQhF0"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "TRkou64Vvwvr48GGKjBrMpPjFqE",
-      "id": {
-        "kind": "youtube#video",
-        "videoId": "EynbJ2mAgYg"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "_-0mV6MKIj2TUsG9e5bSYWbjZdo",
-      "id": {
-        "kind": "youtube#video",
-        "videoId": "SXWS33wWOeA"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "791EcuhZrFS-aejijE-hLIs4T24",
-      "id": {
-        "kind": "youtube#video",
-        "videoId": "NrH-3P4p3Gk"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "_czXRymEE9a_oTLZ_b1DO60WVkM",
-      "id": {
-        "kind": "youtube#video",
-        "videoId": "eg5L1PTgFcA"
-      }
-    }
-  ]
-}
-
- * 
- */
+export type { Snippet };
