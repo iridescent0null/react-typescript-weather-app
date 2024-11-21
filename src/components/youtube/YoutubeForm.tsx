@@ -58,7 +58,7 @@ type Snippet = {
 type PageDirection = "previous" | "next" | "new";
 
 /** valid options in YouTube search */
-type ItemType = "video" | "channel" | "playlist";
+type ItemType = "video" | "channel" | "playlist"; // Currenlty channel and playlist can be sought but displayed
  
 type PageInfo = {
     totalResults: number,//number of the videos
@@ -139,97 +139,28 @@ const YoutubeForm = (props: YoutubeProps) => {
     const [nextPageToken, setNextPageToken] = useState<string>();
     const [previousPageToken, setPreviousPageToken] = useState<string>();
     const [pageDirection,setPageDirection] = useState<PageDirection>("new");
+    const [searchItem, setSearchItem] = useState<ItemType>();
 
-    const soughtItemType: ItemType = "video"; // TODO make choosable
     const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
-    const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}`;
-    const getAnotherPageSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${soughtItemType}&pageToken=`;
+    const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}`;
+    const getAnotherPageSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}&pageToken=`;
 
     /** when it is true, http request will get quenched */
     const gateKeeper = false;
 
+    const designateSearchItemType = (itemTypeStr: string | undefined) => {
+        if (!itemTypeStr) {
+            throw new Error(); // noamally cannot come here
+        }
+        const itemType = itemTypeStr as unknown as ItemType;
+        setSearchItem(itemType);
+    }
     const getVideosPrev = (e: React.FormEvent<HTMLFormElement>) => {
-        // e.preventDefault();
-        // if (gateKeeper) {
-        //     alert("under construction");
-        //     return; 
-        // } 
-        // fetch(getAnotherPageSearchEndPoint + previousPageToken)
-        // .then(res =>  res.json())
-        // .then(json => {
-        //     console.log(json);
-        //     const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
-        //     const infos = (json as unknown as SearchResponse).pageInfo;
-        //     setSearchResult(
-        //         {
-        //             "videos": foundVideos,
-        //             "total": infos.totalResults
-        //         }
-        //     )
-        //     if ((json as unknown as SearchResponse).nextPageToken){
-        //         setNextPageToken(
-        //             (json as unknown as SearchResponse).nextPageToken
-        //         )
-        //     }
-        //     if ((json as unknown as SearchResponse).prevPageToken){
-        //         setPreviousPageToken(
-        //             (json as unknown as SearchResponse).prevPageToken
-        //         )
-        //     }
-        //     return foundVideos;
-        // })
-        // .then(videos => getAllDetailes(videos))
-        // .then(snippets => {
-        //     setVideoResult(
-        //         {
-        //             snippets: snippets
-        //         }
-        //     );
-        // })
-        // .catch(error => console.error(error));
         setPageDirection("previous");
         getVideos(e);
     }
 
     const getVideosNext = (e: React.FormEvent<HTMLFormElement>) => {
-        // e.preventDefault();
-        // if (gateKeeper) {
-        //     alert("under construction");
-        //     return; 
-        // } 
-        // fetch(getAnotherPageSearchEndPoint + nextPageToken)
-        // .then(res =>  res.json())
-        // .then(json => {
-        //     console.log(json);
-        //     const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
-        //     const infos = (json as unknown as SearchResponse).pageInfo;
-        //     setSearchResult(
-        //         {
-        //             "videos": foundVideos,
-        //             "total": infos.totalResults
-        //         }
-        //     )
-        //     if ((json as unknown as SearchResponse).nextPageToken){
-        //         setNextPageToken(
-        //             (json as unknown as SearchResponse).nextPageToken
-        //         )
-        //     }
-        //     if ((json as unknown as SearchResponse).prevPageToken){
-        //         setPreviousPageToken(
-        //             (json as unknown as SearchResponse).prevPageToken
-        //         )
-        //     }
-        //     return foundVideos;
-        // })
-        // .then(videos => getAllDetailes(videos))
-        // .then(snippets => {
-        //     setVideoResult(
-        //         {
-        //             snippets: snippets
-        //         }
-        //     );
-        // })
-        // .catch(error => console.error(error));
         setPageDirection("next");
         getVideos(e);
     }
@@ -240,28 +171,12 @@ const YoutubeForm = (props: YoutubeProps) => {
     }
 
     const getVideos = (e: React.FormEvent<HTMLFormElement>) => {
+        console.log(searchItem);
         e.preventDefault();
         if (gateKeeper) {
             alert("under construction");
             return; 
         } 
-
-        // if (pageDirection === "new") {
-        //     getNewVideos(e);
-        //     return;
-        // }
-
-        // if (pageDirection === "previous") {
-        //     getVideosPrev(e);
-        //     return;
-        // }
-
-        // if (pageDirection === "next") {
-        //     getVideosNext(e);
-        //     return;
-        // }
-
-        // throw Error();
 
         const searchURL = pageDirection === "new"? getSearchEndPoint: pageDirection === "previous"? getAnotherPageSearchEndPoint + previousPageToken: getAnotherPageSearchEndPoint + nextPageToken
 
@@ -303,6 +218,8 @@ const YoutubeForm = (props: YoutubeProps) => {
             .catch(error => console.error(error));
     }
 
+
+    // FIXME display playlist and channel search result
     return (
     <>
         <form onSubmit={getNewVideos} >
@@ -311,6 +228,11 @@ const YoutubeForm = (props: YoutubeProps) => {
                     props.setYoutubeKeyword(e.target.value);
                 }
             } className="form-control"/><br/>
+            <div>
+                <input type="radio" name="item" value="video" id="videoRadio" onChange={e=>designateSearchItemType(e.target.value)} defaultChecked={true} /> <label htmlFor="itemRadio">video&nbsp;</label>
+                <input type="radio" name="item" value="channel" id="channelRadio" onChange={e=>designateSearchItemType(e.target.value)} /> <label htmlFor="itemRadio">channel&nbsp;</label>
+                <input type="radio" name="item" value="playlist" id="playlistRadio" onChange={e=>designateSearchItemType(e.target.value)} /> <label htmlFor="itemRadio">playlist&nbsp;</label>
+            </div>
             <button className="btn btn-success" type="submit"> search  youtube</button>
             <div>
             {searchResult?"total videos: "+ searchResult.total:""}
