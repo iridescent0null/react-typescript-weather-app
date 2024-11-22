@@ -49,7 +49,7 @@ thead th {
   text-align: left;
 }
 
-.video-container {
+.video-container, .channel-container {
   padding: 20px;
   margin: 5px;
   background-color: yellowgreen;

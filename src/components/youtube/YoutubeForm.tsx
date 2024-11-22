@@ -1,8 +1,9 @@
 import { useState } from "react"
 import Config from "../../Config"
 import VideoDivision from "./VideoDivision"
+import ChannelDivision from "./ChannelDivision"
 
-// TODO remove countless comment lines after tests (depelecation of API quata prevented me from doing that)
+// FIXME this form erroneously shares the page token among the three search types!
 
 /** object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
@@ -17,6 +18,24 @@ type FoundVideo = { //TODO not exact yet
         aspectRation: string
     }
 }
+// TODO consolidate these three FoundXXX types
+type FoundPlayList = {
+    kind: string,
+    etag: string,
+    id: {
+        kind: string,
+        playlistId: string
+    }
+}
+type FoundChannel = {
+    kind: string,
+    etag: string,
+    id: {
+        kind: string,
+        channelId: string
+    }
+}
+
 
 /** object in responses from ~/video API */
 type DetailedVideo = {
@@ -43,6 +62,7 @@ type Snippet = {
     categoryId?: string,
     channelId?: string,
     channelTitle?: string,
+    customUrl?: string,
     defaultAudioLanguage?: string,
     description: string,
     localized?:{
@@ -53,6 +73,8 @@ type Snippet = {
     thumbnails: Thumbnails
     title: string
 }
+
+type BrandedSnippet = Snippet & {_brand: ItemType}
 
 /** pagenation option (new means to get fresh search result)*/
 type PageDirection = "previous" | "next" | "new";
@@ -72,8 +94,9 @@ type SearchResponse = {
     prevPageToken?:string,
     regionCode: string, // TODO more precise type?
     pageInfo: PageInfo,
-    items: FoundVideo[]
+    items: FoundVideo[] | FoundPlayList[] | FoundChannel[]
 }
+
 /** from ~/video API */
 type VideoResponse = {
     etag: string,
@@ -83,12 +106,19 @@ type VideoResponse = {
 }
 
 type SearchResult = {
-    videos: FoundVideo[],
+    videos: FoundVideo[] | FoundPlayList[] | FoundChannel[], // TODO rename the key
     total: number
 }
-type VideoResult = {
+type VideoResult = { // TODO better name (versatile name)
     snippets: Snippet[]
 }
+type ChannelResult = {// TODO duplication with VideoResult
+    snippets: Snippet[]
+}
+type PlaylistResult = {
+    snippets: Snippet[]
+}
+
 
 type YoutubeProps = {
     setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
@@ -98,13 +128,92 @@ type YoutubeProps = {
 const YoutubeForm = (props: YoutubeProps) => {
     console.log(props);
 
+    async function getAllDetails (foundItems: FoundVideo[] | FoundPlayList[] | FoundChannel[]) {
+        console.log(foundItems);
+        if("playlistId" in foundItems[0].id) {
+            fetch(getPlaylistEndPoint + foundItems[0].id.playlistId)
+             .then(res => console.log(res.json()));
+            return await getAllPlaylistDetailes (foundItems as FoundPlayList[]);
+        }
+
+        if("channelId" in foundItems[0].id) {
+            return await getAllChannelDetails(foundItems as FoundChannel[]);
+        }
+    
+        if("videoId" in foundItems[0].id) {
+            return await getAllVideoDetailes (foundItems as FoundVideo[]);
+        }
+        throw new Error();
+    }
+
+    async function getAllChannelDetails(foundChannels: FoundChannel[]) {
+        const requestURLs = foundChannels.map(channel => getChannelEndPoint + channel.id.channelId);
+        const snippets: BrandedSnippet[] = [];
+        return await Promise.all(
+            [
+                fetch(requestURLs[0]).then(res=>res.json()),
+                fetch(requestURLs[1]).then(res=>res.json()),
+                fetch(requestURLs[2]).then(res=>res.json()),
+                fetch(requestURLs[3]).then(res=>res.json()),
+                fetch(requestURLs[4]).then(res=>res.json()),
+            ]
+        )
+        .then(responses => {
+            const castResse = (responses as unknown as VideoResponse[]);
+            const channelReses: VideoResponse[]=[];
+            for(let i = 0; i < castResse.length; i++){
+                channelReses.push(castResse[i]);
+            }
+            return channelReses;
+        })
+        .then(detailedChannels => {
+            for(let i = 0; i < detailedChannels.length; i++) {
+                snippets.push({...detailedChannels[i].items[0].snippet, _brand:"channel"});
+            }
+            return snippets;
+        })
+    }
+
+
+    async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[]) {
+        const requestURLs = foundPlaylists.map(playlist => getPlaylistEndPoint + playlist.id.playlistId);
+        const snippets: BrandedSnippet[] = [];
+        return await Promise.all( //FIXME handle non-fixed length!
+            [
+                fetch(requestURLs[0]).then(res=>res.json()),
+                fetch(requestURLs[1]).then(res=>res.json()),
+                fetch(requestURLs[2]).then(res=>res.json()),
+                fetch(requestURLs[3]).then(res=>res.json()),
+                fetch(requestURLs[4]).then(res=>res.json()),
+            ]
+        )
+        .then(responses => {
+            const castReses = (responses as unknown as VideoResponse[]);
+            const videoReses: VideoResponse[]=[];
+            for(let i =0; i < responses.length; i++) {
+                videoReses.push(castReses[i]);
+            }
+            return videoReses;
+        })
+        .then(detailedVideos => {
+            for (let i = 0; i < detailedVideos.length; i++) {
+
+                // TODO length check (normally items' length should be just 1)
+
+                console.log(detailedVideos[i].items[0].snippet.title);
+                snippets.push({...detailedVideos[i].items[0].snippet, _brand: "playlist"});
+            }
+        })
+        .then(() => snippets);
+    };
+
     /** 
      * Call a Youtube API multiple times to translate the video ids to detailed information \
      * FIXME: this function currently calls the API exactly five times 
     */
-    async function getAllDetailes (foundVideos: FoundVideo[]) {
+    async function getAllVideoDetailes (foundVideos: FoundVideo[]) {
         const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
-        const snippets: Snippet[] = [];
+        const snippets: BrandedSnippet[] = [];
         return await Promise.all( //FIXME handle non-fixed length!
             [
                 fetch(requestURLs[0]).then(res=>res.json()),
@@ -128,7 +237,7 @@ const YoutubeForm = (props: YoutubeProps) => {
                 // TODO length check (normally items' length should be just 1)
 
                 console.log(detailedVideos[i].items[0].snippet.title);
-                snippets.push(detailedVideos[i].items[0].snippet);
+                snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
             }
         })
         .then(() => snippets);
@@ -136,12 +245,16 @@ const YoutubeForm = (props: YoutubeProps) => {
 
     const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can be removed?
     const [videoResult, setVideoResult] = useState<VideoResult>();
+    const [channelResult, setChannelResult] = useState<ChannelResult>();
+    const [playlistResult, setPlaylistResult] = useState<PlaylistResult>();
     const [nextPageToken, setNextPageToken] = useState<string>();
     const [previousPageToken, setPreviousPageToken] = useState<string>();
     const [pageDirection,setPageDirection] = useState<PageDirection>("new");
-    const [searchItem, setSearchItem] = useState<ItemType>();
+    const [searchItem, setSearchItem] = useState<ItemType>("video");
 
+    const getPlaylistEndPoint = `https://www.googleapis.com/youtube/v3/playlists?key=${Config.youtube.apiKey}&part=snippet&id=`
     const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
+    const getChannelEndPoint =  `https://www.googleapis.com/youtube/v3/channels?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}`;
     const getAnotherPageSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}&pageToken=`;
 
@@ -170,7 +283,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         getVideos(e);
     }
 
-    const getVideos = (e: React.FormEvent<HTMLFormElement>) => {
+    const getVideos = (e: React.FormEvent<HTMLFormElement>) => { //TODO rename
         console.log(searchItem);
         e.preventDefault();
         if (gateKeeper) {
@@ -184,8 +297,9 @@ const YoutubeForm = (props: YoutubeProps) => {
             .then(res =>  res.json())
             .then(json => {
                 console.log(json);
-                const foundVideos: FoundVideo[] =  (json as unknown as SearchResponse).items;
+                const foundVideos: FoundVideo[] | FoundPlayList[] | FoundChannel[]=  (json as unknown as SearchResponse).items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
+
                 setSearchResult(
                     {
                         "videos": foundVideos,
@@ -207,17 +321,29 @@ const YoutubeForm = (props: YoutubeProps) => {
                 }
                 return foundVideos;
             })
-            .then(videos => getAllDetailes(videos))
+            .then(videos => getAllDetails(videos))
             .then(snippets => {
-                setVideoResult(
-                    {
-                        snippets: snippets
-                    }
-                );
+
+                if (snippets[0]._brand === "video") {
+                    setVideoResult(
+                        {
+                            snippets: snippets
+                        }
+                    );
+                    setChannelResult(undefined);
+                }
+
+                if (snippets[0]._brand === "channel") {
+                    setChannelResult(
+                        {
+                            snippets: snippets
+                        }
+                    );
+                    setVideoResult(undefined);
+                }
             })
             .catch(error => console.error(error));
     }
-
 
     // FIXME display playlist and channel search result
     return (
@@ -241,7 +367,13 @@ const YoutubeForm = (props: YoutubeProps) => {
             <VideoDivision snippet={videoResult? videoResult.snippets[1] : undefined} />
             <VideoDivision snippet={videoResult? videoResult.snippets[2] : undefined} />
             <VideoDivision snippet={videoResult? videoResult.snippets[3] : undefined} />
-            <VideoDivision snippet={videoResult? videoResult.snippets[4] : undefined} />     
+            <VideoDivision snippet={videoResult? videoResult.snippets[4] : undefined} />    
+
+            <ChannelDivision snippet={channelResult? channelResult.snippets[0] : undefined} /> 
+            <ChannelDivision snippet={channelResult? channelResult.snippets[1] : undefined} /> 
+            <ChannelDivision snippet={channelResult? channelResult.snippets[2] : undefined} /> 
+            <ChannelDivision snippet={channelResult? channelResult.snippets[3] : undefined} /> 
+            <ChannelDivision snippet={channelResult? channelResult.snippets[4] : undefined} /> 
         </form>
         <form onSubmit={getVideosPrev} >
             {previousPageToken? <button className="btn form-control btn-sm" type="submit"> &#60; PREVIOUS</button>:<span></span>}
