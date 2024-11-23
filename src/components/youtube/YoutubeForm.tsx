@@ -4,6 +4,7 @@ import VideoDivision from "./VideoDivision"
 import ChannelDivision from "./ChannelDivision"
 
 // FIXME this form erroneously shares the page token among the three search types!
+// FIXME reproduced bug: search for videos -> search for channels -> push the next button -> the page won't change
 
 /** object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
@@ -36,6 +37,7 @@ type FoundChannel = {
     }
 }
 
+type FoundItems = FoundVideo[] | FoundPlayList[] | FoundChannel[];
 
 /** object in responses from ~/video API */
 type DetailedVideo = {
@@ -86,6 +88,7 @@ type PageInfo = {
     totalResults: number,//number of the videos
     resultsPerPage: number
 }
+
 /** from ~/search API */
 type SearchResponse = {
     kind: string,
@@ -94,7 +97,7 @@ type SearchResponse = {
     prevPageToken?:string,
     regionCode: string, // TODO more precise type?
     pageInfo: PageInfo,
-    items: FoundVideo[] | FoundPlayList[] | FoundChannel[]
+    items: FoundItems
 }
 
 /** from ~/video API */
@@ -106,19 +109,20 @@ type VideoResponse = {
 }
 
 type SearchResult = {
-    videos: FoundVideo[] | FoundPlayList[] | FoundChannel[], // TODO rename the key
+    items: FoundItems,
     total: number
 }
-type VideoResult = { // TODO better name (versatile name)
+
+// corrently these three types for result are completely the same as each other (in the future idk)
+type VideoResult = {
     snippets: Snippet[]
 }
-type ChannelResult = {// TODO duplication with VideoResult
+type ChannelResult = {
     snippets: Snippet[]
 }
 type PlaylistResult = {
     snippets: Snippet[]
 }
-
 
 type YoutubeProps = {
     setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
@@ -128,11 +132,9 @@ type YoutubeProps = {
 const YoutubeForm = (props: YoutubeProps) => {
     console.log(props);
 
-    async function getAllDetails (foundItems: FoundVideo[] | FoundPlayList[] | FoundChannel[]) {
+    async function getAllDetails (foundItems: FoundItems) {
         console.log(foundItems);
         if("playlistId" in foundItems[0].id) {
-            fetch(getPlaylistEndPoint + foundItems[0].id.playlistId)
-             .then(res => console.log(res.json()));
             return await getAllPlaylistDetailes (foundItems as FoundPlayList[]);
         }
 
@@ -146,25 +148,29 @@ const YoutubeForm = (props: YoutubeProps) => {
         throw new Error();
     }
 
+    async function requestAll (URLs: string[]) {
+        return await Promise.all( //FIXME handle non-fixed length! particularly 4 or less length may result in an error
+            [
+                fetch(URLs[0]).then(res=>res.json()),
+                fetch(URLs[1]).then(res=>res.json()),
+                fetch(URLs[2]).then(res=>res.json()),
+                fetch(URLs[3]).then(res=>res.json()),
+                fetch(URLs[4]).then(res=>res.json()),
+            ]
+        )
+    }
+
     async function getAllChannelDetails(foundChannels: FoundChannel[]) {
         const requestURLs = foundChannels.map(channel => getChannelEndPoint + channel.id.channelId);
         const snippets: BrandedSnippet[] = [];
-        return await Promise.all(
-            [
-                fetch(requestURLs[0]).then(res=>res.json()),
-                fetch(requestURLs[1]).then(res=>res.json()),
-                fetch(requestURLs[2]).then(res=>res.json()),
-                fetch(requestURLs[3]).then(res=>res.json()),
-                fetch(requestURLs[4]).then(res=>res.json()),
-            ]
-        )
-        .then(responses => {
-            const castResse = (responses as unknown as VideoResponse[]);
-            const channelReses: VideoResponse[]=[];
-            for(let i = 0; i < castResse.length; i++){
-                channelReses.push(castResse[i]);
-            }
-            return channelReses;
+        return await requestAll(requestURLs)
+            .then(responses => {
+                const castResse = (responses as unknown as VideoResponse[]);
+                const channelReses: VideoResponse[] = [];
+                for(let i = 0; i < castResse.length; i++){
+                    channelReses.push(castResse[i]);
+                }
+                return channelReses;
         })
         .then(detailedChannels => {
             for(let i = 0; i < detailedChannels.length; i++) {
@@ -174,33 +180,23 @@ const YoutubeForm = (props: YoutubeProps) => {
         })
     }
 
-
     async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[]) {
         const requestURLs = foundPlaylists.map(playlist => getPlaylistEndPoint + playlist.id.playlistId);
         const snippets: BrandedSnippet[] = [];
-        return await Promise.all( //FIXME handle non-fixed length!
-            [
-                fetch(requestURLs[0]).then(res=>res.json()),
-                fetch(requestURLs[1]).then(res=>res.json()),
-                fetch(requestURLs[2]).then(res=>res.json()),
-                fetch(requestURLs[3]).then(res=>res.json()),
-                fetch(requestURLs[4]).then(res=>res.json()),
-            ]
-        )
+        return await requestAll(requestURLs)
         .then(responses => {
-            const castReses = (responses as unknown as VideoResponse[]);
-            const videoReses: VideoResponse[]=[];
-            for(let i =0; i < responses.length; i++) {
-                videoReses.push(castReses[i]);
-            }
-            return videoReses;
+                const castReses = (responses as unknown as VideoResponse[]);
+                const videoReses: VideoResponse[] = [];
+                for(let i =0; i < responses.length; i++) {
+                    videoReses.push(castReses[i]);
+                }
+                return videoReses;
         })
         .then(detailedVideos => {
             for (let i = 0; i < detailedVideos.length; i++) {
 
                 // TODO length check (normally items' length should be just 1)
 
-                console.log(detailedVideos[i].items[0].snippet.title);
                 snippets.push({...detailedVideos[i].items[0].snippet, _brand: "playlist"});
             }
         })
@@ -214,29 +210,20 @@ const YoutubeForm = (props: YoutubeProps) => {
     async function getAllVideoDetailes (foundVideos: FoundVideo[]) {
         const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
         const snippets: BrandedSnippet[] = [];
-        return await Promise.all( //FIXME handle non-fixed length!
-            [
-                fetch(requestURLs[0]).then(res=>res.json()),
-                fetch(requestURLs[1]).then(res=>res.json()),
-                fetch(requestURLs[2]).then(res=>res.json()),
-                fetch(requestURLs[3]).then(res=>res.json()),
-                fetch(requestURLs[4]).then(res=>res.json()),
-            ]
-        )
+        return await requestAll(requestURLs)
         .then(responses => {
-            const castReses = (responses as unknown as VideoResponse[]);
-            const videoReses:VideoResponse[]=[];
-            for(let i =0; i < responses.length; i++) {
-                videoReses.push(castReses[i]);
-            }
-            return videoReses;
+                const castReses = (responses as unknown as VideoResponse[]);
+                const videoReses:VideoResponse[] = [];
+                for(let i =0; i < responses.length; i++) {
+                    videoReses.push(castReses[i]);
+                }
+                return videoReses;
         })
         .then(detailedVideos => {
             for (let i = 0; i < detailedVideos.length; i++) {
 
                 // TODO length check (normally items' length should be just 1)
 
-                console.log(detailedVideos[i].items[0].snippet.title);
                 snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
             }
         })
@@ -270,20 +257,20 @@ const YoutubeForm = (props: YoutubeProps) => {
     }
     const getVideosPrev = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("previous");
-        getVideos(e);
+        getItems(e);
     }
 
     const getVideosNext = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("next");
-        getVideos(e);
+        getItems(e);
     }
 
     const getNewVideos = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("new");
-        getVideos(e);
+        getItems(e);
     }
 
-    const getVideos = (e: React.FormEvent<HTMLFormElement>) => { //TODO rename
+    const getItems = (e: React.FormEvent<HTMLFormElement>) => { //TODO rename
         console.log(searchItem);
         e.preventDefault();
         if (gateKeeper) {
@@ -293,22 +280,23 @@ const YoutubeForm = (props: YoutubeProps) => {
 
         const searchURL = pageDirection === "new"? getSearchEndPoint: pageDirection === "previous"? getAnotherPageSearchEndPoint + previousPageToken: getAnotherPageSearchEndPoint + nextPageToken
 
-        fetch(searchURL) //TODO accept page token if needed
+        fetch(searchURL)
             .then(res =>  res.json())
             .then(json => {
                 console.log(json);
-                const foundVideos: FoundVideo[] | FoundPlayList[] | FoundChannel[]=  (json as unknown as SearchResponse).items;
+                const foundVideos: FoundItems =  (json as unknown as SearchResponse).items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
 
                 setSearchResult(
                     {
-                        "videos": foundVideos,
+                        "items": foundVideos,
                         "total": infos.totalResults
                     }
                 )
 
                 // TODO resolve lengthy if statements
                 // TODO don't these states inadvertently remain old tokens after new search?
+                // TODO judge the pageToken type (video, channel or playlist)
                 if ((json as unknown as SearchResponse).nextPageToken){
                     setNextPageToken(
                         (json as unknown as SearchResponse).nextPageToken
@@ -345,7 +333,7 @@ const YoutubeForm = (props: YoutubeProps) => {
             .catch(error => console.error(error));
     }
 
-    // FIXME display playlist and channel search result
+    // FIXME display playlist search result
     return (
     <>
         <form onSubmit={getNewVideos} >
