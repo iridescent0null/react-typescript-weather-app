@@ -6,7 +6,6 @@ type ChannelDivisionProps = {
 }
 
 const ChannelDivision = (props: ChannelDivisionProps) => {
-    console.log(props);
     const snippet = props.snippet;
         if (!snippet) {
             return (<span></span>);

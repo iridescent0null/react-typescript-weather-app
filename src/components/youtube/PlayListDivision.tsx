@@ -1,64 +1,41 @@
+import { Snippet } from "./YoutubeForm";
+import { formPrettyDate } from "../sandbox/SandBoxForm";
 
 
 // can VIdeoDevision be used instead??
 
+type PlaylistDivisionProps = {
+  snippet: Snippet | undefined;
+}
+
+const PlaylistDivision = (props: PlaylistDivisionProps) => {
+  const snippet = props.snippet;
+
+  if (!snippet) {
+    return (<span></span>);
+  }
+
+  return (
+    <div className="container playlist-container">
+        <div className="row">
+            <img className="col-3" src={snippet.thumbnails.default? snippet.thumbnails.default.url:""}/>
+            <div className="col-9 video-detail">
+                <div className="title">title: {snippet.title}</div>
+                <div className="channel">channel: {snippet.channelTitle}</div>
+                <div className="description">description: {snippet.description}</div>
+                <div className="publishedAt">publish: {formPrettyDate(new Date(snippet.publishedAt))}</div>
+            </div>
+        </div>
+    </div>
+  )
+}
+
+export default PlaylistDivision;
 
 /**
  * {
-  "kind": "youtube#searchListResponse",
-  "etag": "xBLL1OeF6Wx00JVDTJTRHVvYeWo",
-  "nextPageToken": "CAUQAA",
-  "regionCode": "JP",
-  "pageInfo": {
-    "totalResults": 1271,
-    "resultsPerPage": 5
-  },
-  "items": [
-    {
-      "kind": "youtube#searchResult",
-      "etag": "OMaYI5lg2H8DnJ4kPQK8KiL48fM",
-      "id": {
-        "kind": "youtube#playlist",
-        "playlistId": "PLJF5o9V1NJ_TxtRWitQtU4NZt4kj0fdDR"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "tNduPIoWfpgyIwvoR8FAFRQw-bA",
-      "id": {
-        "kind": "youtube#playlist",
-        "playlistId": "PL7TSRJ7ePNhLW2zG7Jfw33h-5AdBPDbjM"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "S-syopUUE8BMF2zW6aQTRTShyjI",
-      "id": {
-        "kind": "youtube#playlist",
-        "playlistId": "PLivPhjvJMFujLmi2eOzsMHzVp-HHF_iH9"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "IZHZSgHxARtWF39RlfJBS49Wg00",
-      "id": {
-        "kind": "youtube#playlist",
-        "playlistId": "PLYGcApI7psQ_eWi9HTNP2T2Giz9eRLgsu"
-      }
-    },
-    {
-      "kind": "youtube#searchResult",
-      "etag": "iYXoqp9ayurwqmR9qcCrEkn3g7Y",
-      "id": {
-        "kind": "youtube#playlist",
-        "playlistId": "PL-CoUzeZqn1Fu5VKdyBAahGbZGB4cLKFp"
-      }
-    }
-  ]
-}
-{
   "kind": "youtube#playlistListResponse",
-  "etag": "oGCMAbam3TI0GjF_sDu1m_eLoj0",
+  "etag": "StDkAJGgSPxmXdsrWqKmUcj4u9M",
   "pageInfo": {
     "totalResults": 1,
     "resultsPerPage": 5
@@ -66,43 +43,43 @@
   "items": [
     {
       "kind": "youtube#playlist",
-      "etag": "yHXAbpMhIuDAI0Jf9b00kBKiPPM",
-      "id": "PLtlnL9ZHpvQkDZQVwuMDAL4D17YuIGXQi",
+      "etag": "hoPeF53n3H-BAv3oPdBhvHw0mMw",
+      "id": "PLivPhjvJMFujLmi2eOzsMHzVp-HHF_iH9",
       "snippet": {
-        "publishedAt": "2022-06-07T20:29:59Z",
-        "channelId": "UCdY4rwNjbE-h5faq0TtFLmg",
-        "title": "2022大谷翔平ファンサービス人気動画",
+        "publishedAt": "2021-12-31T14:28:28Z",
+        "channelId": "UCeLKqjlXl3l-2yabOEboIaQ",
+        "title": "アドマイヤベガ",
         "description": "",
         "thumbnails": {
           "default": {
-            "url": "https://i.ytimg.com/vi/zooFlYMPd0I/default.jpg",
+            "url": "https://i.ytimg.com/vi/cjNW-swzziY/default.jpg",
             "width": 120,
             "height": 90
           },
           "medium": {
-            "url": "https://i.ytimg.com/vi/zooFlYMPd0I/mqdefault.jpg",
+            "url": "https://i.ytimg.com/vi/cjNW-swzziY/mqdefault.jpg",
             "width": 320,
             "height": 180
           },
           "high": {
-            "url": "https://i.ytimg.com/vi/zooFlYMPd0I/hqdefault.jpg",
+            "url": "https://i.ytimg.com/vi/cjNW-swzziY/hqdefault.jpg",
             "width": 480,
             "height": 360
           },
           "standard": {
-            "url": "https://i.ytimg.com/vi/zooFlYMPd0I/sddefault.jpg",
+            "url": "https://i.ytimg.com/vi/cjNW-swzziY/sddefault.jpg",
             "width": 640,
             "height": 480
           },
           "maxres": {
-            "url": "https://i.ytimg.com/vi/zooFlYMPd0I/maxresdefault.jpg",
+            "url": "https://i.ytimg.com/vi/cjNW-swzziY/maxresdefault.jpg",
             "width": 1280,
             "height": 720
           }
         },
-        "channelTitle": "Shohei Ohtani Fan Club KAORU",
+        "channelTitle": "平井大輔",
         "localized": {
-          "title": "2022大谷翔平ファンサービス人気動画",
+          "title": "アドマイヤベガ",
           "description": ""
         }
       }

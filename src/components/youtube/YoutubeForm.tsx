@@ -2,9 +2,12 @@ import { useState } from "react"
 import Config from "../../Config"
 import VideoDivision from "./VideoDivision"
 import ChannelDivision from "./ChannelDivision"
+import PlaylistDivision from "./PlaylistDivision"
+
+// TODO implement without thumbnail mode!
 
 // FIXME this form erroneously shares the page token among the three search types!
-// FIXME reproduced bug: search for videos -> search for channels -> push the next button -> the page won't change
+// FIXME for some reason we can conduct "Search -> next -> prev -> prev(what?)-> prev -> next" and then face an error (undefined token)
 
 /** object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
@@ -94,7 +97,7 @@ type SearchResponse = {
     kind: string,
     etag: string,
     nextPageToken?: string,
-    prevPageToken?:string,
+    prevPageToken?: string,
     regionCode: string, // TODO more precise type?
     pageInfo: PageInfo,
     items: FoundItems
@@ -102,9 +105,9 @@ type SearchResponse = {
 
 /** from ~/video API */
 type VideoResponse = {
+    kind: string,
     etag: string,
     items: DetailedVideo[],
-    kind: string,
     pageInfo: PageInfo
 }
 
@@ -116,13 +119,25 @@ type SearchResult = {
 // corrently these three types for result are completely the same as each other (in the future idk)
 type VideoResult = {
     snippets: Snippet[]
-}
+} & PageTokenPair;
+
 type ChannelResult = {
     snippets: Snippet[]
-}
+} & PageTokenPair;
 type PlaylistResult = {
     snippets: Snippet[]
+} & PageTokenPair;
+
+type PageTokenPair = {
+    nextPageToken: string | undefined,
+    prevPageToken: string | undefined
 }
+
+interface DetailedResult {
+     snippets: Snippet[]
+     nextPageToken: string | undefined,
+     prevPageToken: string | undefined 
+ }
 
 type YoutubeProps = {
     setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
@@ -130,12 +145,33 @@ type YoutubeProps = {
 }
 
 const YoutubeForm = (props: YoutubeProps) => {
-    console.log(props);
+    function exractPageTokens(results: DetailedResult[]) {
+        // get and set the one which is found first
+        const tokens :PageTokenPair = {
+            nextPageToken: undefined,
+            prevPageToken: undefined
+        }
+        for (let i = 0; i < results.length; i++) {
+            const token = results[i].nextPageToken; // TS needs this temporal variable to believe that it is NOT undefined
+            if (token) {
+                tokens.nextPageToken = token;
+                break;
+            }
+        }
+
+        for  (let i = 0; i < results.length; i++) {
+            const token = results[i].prevPageToken; // TS needs this temporal variable to believe that it is NOT undefined
+            if (token) {
+                tokens.prevPageToken = token;
+                break;
+            }
+        }
+        return tokens;
+    }
 
     async function getAllDetails (foundItems: FoundItems) {
-        console.log(foundItems);
         if("playlistId" in foundItems[0].id) {
-            return await getAllPlaylistDetailes (foundItems as FoundPlayList[]);
+            return await getAllPlaylistDetailes(foundItems as FoundPlayList[]);
         }
 
         if("channelId" in foundItems[0].id) {
@@ -143,7 +179,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         }
     
         if("videoId" in foundItems[0].id) {
-            return await getAllVideoDetailes (foundItems as FoundVideo[]);
+            return await getAllVideoDetailes(foundItems as FoundVideo[]);
         }
         throw new Error();
     }
@@ -238,6 +274,7 @@ const YoutubeForm = (props: YoutubeProps) => {
     const [previousPageToken, setPreviousPageToken] = useState<string>();
     const [pageDirection,setPageDirection] = useState<PageDirection>("new");
     const [searchItem, setSearchItem] = useState<ItemType>("video");
+    const [lastSearchItem, setLastSearchItem] = useState<ItemType | undefined>(undefined);
 
     const getPlaylistEndPoint = `https://www.googleapis.com/youtube/v3/playlists?key=${Config.youtube.apiKey}&part=snippet&id=`
     const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
@@ -257,34 +294,63 @@ const YoutubeForm = (props: YoutubeProps) => {
     }
     const getVideosPrev = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("previous");
-        getItems(e);
+        const tokens = getItems(e);
+        setNextPageToken(tokens.nextPageToken); 
+        setPreviousPageToken(tokens.prevPageToken);
     }
 
     const getVideosNext = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("next");
-        getItems(e);
+        const tokens = getItems(e);
+        setNextPageToken(tokens.nextPageToken); 
+        setPreviousPageToken(tokens.prevPageToken);
     }
 
     const getNewVideos = (e: React.FormEvent<HTMLFormElement>) => {
         setPageDirection("new");
-        getItems(e);
+        const tokens = getItems(e);
+        setNextPageToken(tokens.nextPageToken); 
+        setPreviousPageToken(tokens.prevPageToken);
     }
 
     const getItems = (e: React.FormEvent<HTMLFormElement>) => { //TODO rename
         console.log(searchItem);
+        console.log({pageDirection:pageDirection, nextPageToken:nextPageToken,previousPageToken:previousPageToken});
         e.preventDefault();
+
+        const tokens: PageTokenPair = {
+            nextPageToken: undefined,
+            prevPageToken: undefined
+        };
+
         if (gateKeeper) {
             alert("under construction");
-            return; 
-        } 
+            return tokens; 
+        }
 
-        const searchURL = pageDirection === "new"? getSearchEndPoint: pageDirection === "previous"? getAnotherPageSearchEndPoint + previousPageToken: getAnotherPageSearchEndPoint + nextPageToken
+        if (lastSearchItem && (lastSearchItem !== searchItem)) {
+            // these tokens are no longer valid
+            setNextPageToken(undefined);
+            setPreviousPageToken(undefined);
+            setPageDirection("new");
+        }
 
+        // for some reason the direction is often erroneously stated as new! therefore complecated judgement is needed...
+        // FIXME detect and rectify the erroneous "new" setting 
+        // FIXME the tokens are unstable when a user push the next and previous buttones incesstantly!n
+
+        const searchURL = (/*(pageDirection === "new") &&*/ !nextPageToken && !previousPageToken)?
+                getSearchEndPoint:
+                pageDirection === "previous"?
+                        getAnotherPageSearchEndPoint + previousPageToken:
+                        getAnotherPageSearchEndPoint + nextPageToken;
+        
         fetch(searchURL)
             .then(res =>  res.json())
             .then(json => {
                 console.log(json);
-                const foundVideos: FoundItems =  (json as unknown as SearchResponse).items;
+                const searchResponse: SearchResponse = json as unknown as SearchResponse;
+                const foundVideos: FoundItems =  searchResponse.items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
 
                 setSearchResult(
@@ -294,46 +360,82 @@ const YoutubeForm = (props: YoutubeProps) => {
                     }
                 )
 
+                setNextPageToken(undefined);
+                setPreviousPageToken(undefined);
+
+                if (searchResponse.nextPageToken) {
+                    // nextPageToken = searchResponse.nextPageToken;
+                    setNextPageToken(searchResponse.nextPageToken);
+                    tokens.nextPageToken = searchResponse.nextPageToken;
+                }
+
+                if (searchResponse.prevPageToken) {
+                    // previousPageToken = searchResponse.prevPageToken;
+                    setPreviousPageToken(searchResponse.prevPageToken);
+                    tokens.prevPageToken = searchResponse.prevPageToken;
+                }
+
                 // TODO resolve lengthy if statements
                 // TODO don't these states inadvertently remain old tokens after new search?
                 // TODO judge the pageToken type (video, channel or playlist)
-                if ((json as unknown as SearchResponse).nextPageToken){
-                    setNextPageToken(
-                        (json as unknown as SearchResponse).nextPageToken
-                    )
-                }
-                if ((json as unknown as SearchResponse).prevPageToken){
-                    setPreviousPageToken(
-                        (json as unknown as SearchResponse).prevPageToken
-                    )
-                }
+                // if ((json as unknown as SearchResponse).nextPageToken){
+
+                //     setNextPageToken(//TODO remove!
+                //         (json as unknown as SearchResponse).nextPageToken 
+                //     )
+                //     // foundVideos
+                // }
+                // if ((json as unknown as SearchResponse).prevPageToken){
+                //     setPreviousPageToken(//TODO remove!
+                //         (json as unknown as SearchResponse).prevPageToken
+                //     )
+                // }
                 return foundVideos;
             })
             .then(videos => getAllDetails(videos))
             .then(snippets => {
-
-                if (snippets[0]._brand === "video") {
+                if (snippets[0]._brand === "video") { //this and following lines expect that all snippets share a brand
                     setVideoResult(
                         {
-                            snippets: snippets
+                            snippets: snippets,
+                            nextPageToken: nextPageToken,
+                            prevPageToken: previousPageToken
                         }
                     );
+                    setChannelResult(undefined);
+                    setPlaylistResult(undefined);
+                }
+
+                if (snippets[0]._brand === "playlist") {
+                    setPlaylistResult(
+                        {
+                            snippets :snippets,
+                            nextPageToken: nextPageToken,
+                            prevPageToken: previousPageToken
+                        }
+                    );
+                    setVideoResult(undefined);
                     setChannelResult(undefined);
                 }
 
                 if (snippets[0]._brand === "channel") {
                     setChannelResult(
                         {
-                            snippets: snippets
+                            snippets: snippets,
+                            nextPageToken: nextPageToken,
+                            prevPageToken: previousPageToken
                         }
                     );
                     setVideoResult(undefined);
+                    setPlaylistResult(undefined);
                 }
+                setLastSearchItem(snippets[0]._brand);
+                console.log({lastSearchItem: lastSearchItem, searchItem:searchItem})
             })
             .catch(error => console.error(error));
+        return tokens;
     }
 
-    // FIXME display playlist search result
     return (
     <>
         <form onSubmit={getNewVideos} >
@@ -362,6 +464,12 @@ const YoutubeForm = (props: YoutubeProps) => {
             <ChannelDivision snippet={channelResult? channelResult.snippets[2] : undefined} /> 
             <ChannelDivision snippet={channelResult? channelResult.snippets[3] : undefined} /> 
             <ChannelDivision snippet={channelResult? channelResult.snippets[4] : undefined} /> 
+
+            <PlaylistDivision snippet={playlistResult? playlistResult.snippets[0] : undefined} />
+            <PlaylistDivision snippet={playlistResult? playlistResult.snippets[1] : undefined} />
+            <PlaylistDivision snippet={playlistResult? playlistResult.snippets[2] : undefined} />
+            <PlaylistDivision snippet={playlistResult? playlistResult.snippets[3] : undefined} />
+            <PlaylistDivision snippet={playlistResult? playlistResult.snippets[4] : undefined} />
         </form>
         <form onSubmit={getVideosPrev} >
             {previousPageToken? <button className="btn form-control btn-sm" type="submit"> &#60; PREVIOUS</button>:<span></span>}
