@@ -42,8 +42,8 @@ type FoundChannel = {
 
 type FoundItems = FoundVideo[] | FoundPlayList[] | FoundChannel[];
 
-/** object in responses from ~/video API */
-type DetailedVideo = {
+/** object in responses from ~/video, ~/channel and ~/playlist API */
+type DetailedItem = {
     etag: string,
     id: string,
     kind: string,
@@ -73,9 +73,9 @@ type Snippet = {
     localized?:{
         description: string,
         title: string
-    }
+    },
     publishedAt: Date,
-    thumbnails: Thumbnails
+    thumbnails: Thumbnails,
     title: string
 }
 
@@ -107,7 +107,7 @@ type SearchResponse = {
 type VideoResponse = {
     kind: string,
     etag: string,
-    items: DetailedVideo[],
+    items: DetailedItem[],
     pageInfo: PageInfo
 }
 
@@ -116,11 +116,10 @@ type SearchResult = {
     total: number
 }
 
-// corrently these three types for result are completely the same as each other (in the future idk)
+// currently these three types for result are completely the same as each other (in the future idk)
 type VideoResult = {
     snippets: Snippet[]
 } & PageTokenPair;
-
 type ChannelResult = {
     snippets: Snippet[]
 } & PageTokenPair;
@@ -144,47 +143,282 @@ type YoutubeProps = {
     input: string
 }
 
-const YoutubeForm = (props: YoutubeProps) => {
-    function exractPageTokens(results: DetailedResult[]) {
-        // get and set the one which is found first
-        const tokens :PageTokenPair = {
-            nextPageToken: undefined,
-            prevPageToken: undefined
+const dummyThumbnails = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/"+number+".png");
+const generateDummyThumbnails = (URL: string) => { //not array like (Thumbnails is a key defined by Youtube)
+    return {
+        default: {
+            height: 200,
+            url: URL,
+            width: 200
         }
-        for (let i = 0; i < results.length; i++) {
-            const token = results[i].nextPageToken; // TS needs this temporal variable to believe that it is NOT undefined
-            if (token) {
-                tokens.nextPageToken = token;
-                break;
-            }
+    } as Thumbnails;
+}
+
+const regex = /(?<=https:\/\/www.googleapis.com\/youtube\/v3\/).*\?/
+const regex1 = new RegExp("/(?<=\&id\=/).*\?n/"); // to extract the id (not tested yet)
+const tokenRegex = /(?<=&pageToken=).*/
+
+const generateDummyDetail = (URL: string, index: number) => {
+    const typeWithSlash = URL.match(regex); //e.g., "[video/]"
+    console.log({URL:URL, index:index,typeWithSlash:typeWithSlash,content:typeWithSlash?typeWithSlash[0]:"null"})
+    if (!typeWithSlash) {
+        throw new Error();
+    }
+    const type = typeWithSlash[0].substring(0,(typeWithSlash[0].length-2)) as ItemType;
+    console.log({type:type})
+
+    if (type === "video") {
+        const snippet: Snippet = {
+            categoryId: "dummyCategoryId",
+            channelId: "dummyChannelId",
+            channelTitle: "dummyChannelId",
+            customUrl: "dummyURL",
+            defaultAudioLanguage: "JP",
+            description: "dummy lengthy video description blah blah blah blah blah blah blah",
+            localized:{
+                description: "dummy lengthy video description blah blah blah blah blah blah blah",
+                title: "dummyTitle"
+            },
+            publishedAt: new Date(),
+            thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
+            title: "dummyTitle"
         }
 
-        for  (let i = 0; i < results.length; i++) {
-            const token = results[i].prevPageToken; // TS needs this temporal variable to believe that it is NOT undefined
-            if (token) {
-                tokens.prevPageToken = token;
-                break;
-            }
+        const video: DetailedItem = {
+            etag: "dummyEtag",
+            id: "dummyId", //TODO can be extracted from the URL
+            kind: "dummyKind",
+            snippet: snippet
         }
-        return tokens;
+
+        return {
+            etag: "dummyEtag",
+            kind: "dummyKind",
+            items: [video],
+            pageInfo: {
+                totalResults: 12345,
+                resultsPerPage: 5
+            }
+        } as VideoResponse;
     }
 
-    async function getAllDetails (foundItems: FoundItems) {
+    if (type === "channel") {
+        const snippet: Snippet = {
+            categoryId: "dummyCategoryId",
+            channelId: "dummyChannelId",
+            channelTitle: "dummyChannelId", //TODO is there?
+            customUrl: "dummyURL",
+            defaultAudioLanguage: "JP",
+            description: "dummy lengthy video description blah blah blah blah blah blah blah",
+            localized:{
+                description: "dummy lengthy video description blah blah blah blah blah blah blah",
+                title: "dummyTitle"
+            },
+            publishedAt: new Date(),
+            thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
+            title: "dummyTitle"
+        }
+
+        const channel: DetailedItem = {
+            etag: "dummyEtag",
+            id: "dummyId", //TODO can be extracted from the URL
+            kind: "dummyKind",
+            snippet: snippet 
+        } 
+
+        return {
+            etag: "dummyEtag",
+            kind: "dummyKind",
+            items: [channel],
+            pageInfo: {
+                totalResults: 12345,
+                resultsPerPage: 5
+            }
+        } as VideoResponse;
+    }
+
+    if (type === "playlist") {
+        const snippet: Snippet = {
+            categoryId: "dummyCategoryId",
+            channelId: "dummyChannelId",
+            channelTitle: "dummyChannelId", //TODO is there?
+            customUrl: "dummyURL",
+            defaultAudioLanguage: "JP",
+            description: "dummy lengthy video description blah blah blah blah blah blah blah",
+            localized:{
+                description: "dummy lengthy video description blah blah blah blah blah blah blah",
+                title: "dummyTitle"
+            },
+            publishedAt: new Date(),
+            thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
+            title: "dummyTitle"
+        }
+
+        const playlist: DetailedItem = {
+            etag: "dummyEtag",
+            id: "dummyId", //TODO can be extracted from the URL
+            kind: "dummyKind",
+            snippet: snippet 
+        } 
+
+        return {
+            etag: "dummyEtag",
+            kind: "dummyKind",
+            items: [playlist],
+            pageInfo: {
+                totalResults: 12345,
+                resultsPerPage: 5
+            }
+        } as VideoResponse;
+    } 
+    return Error("type failed to be retrieved from the URL:" + URL) ;//FIXME implement the other types!     
+}
+
+const dummyTokens = ["DUMMY1","DUMMY2","DUMMY3","DUMMY4","DUMMY5","DUMMY6","DUMMY7","DUMMY8","DUMMY9","DUMMY10"];
+
+// FIXME very unstable yet
+const getDummyTokenPair = (oldToken: string | undefined) => {
+
+    if (oldToken === undefined) { // TODO to rely on explicit undefined is safe?
+        return {
+            nextPageToken: dummyTokens[0]
+        } as PageTokenPair;
+    }
+
+    const currentIndex = dummyTokens.findIndex(token => token === oldToken);
+
+    if (currentIndex === undefined) {
+        throw new Error("invalid dummy token");
+    }
+
+    if (currentIndex === 0) {
+        return {
+            nextPageToken: dummyTokens[1]
+        } as PageTokenPair;
+    }
+
+    if (currentIndex === 9) {
+        return {
+            prevPageToken: dummyTokens[8]
+        } as PageTokenPair;
+    }
+
+    return {
+        nextPageToken: dummyTokens[currentIndex-1],
+        prevPageToken: dummyTokens[currentIndex+1]
+    } as PageTokenPair;
+    
+
+}
+
+const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => { //TODO any
+
+    let items: FoundItems;
+    if (type === "video") {
+        items = generateDummyIds("video",suffix).map(id => generateDummyFoundItem("video",id) as FoundVideo);
+    }
+    if (type === "playlist") {
+        items = generateDummyIds("playlist",suffix).map(id => generateDummyFoundItem("playlist",id) as FoundPlayList);
+    }
+    if (type === "channel") {
+        items = generateDummyIds("channel",suffix).map(id => generateDummyFoundItem("channel",id) as FoundChannel);
+    }
+
+    const wrappedToken = URL.match(tokenRegex);
+    const oldToken = wrappedToken?
+            wrappedToken[0]:
+            undefined;
+
+    console.log({URL:URL,wrappedToken:wrappedToken})
+
+    const tokenPair = getDummyTokenPair(oldToken);
+            
+    return {
+        kind: "mockedKind",
+        etag: "mockedEtag",
+        regionCode: "JP",
+        pageInfo: {
+            totalResults: 123456,
+            resultsPerPage: 5
+        },
+        items: items!,
+        nextPageToken: tokenPair.nextPageToken,
+        prevPageToken: tokenPair.prevPageToken
+    } as SearchResponse;
+}
+const generateDummyIds = (type: ItemType, suffix: number) => {
+    const numbers = [11111,22222,33333,44444,55555];
+    return numbers.map(number => number+ type + suffix);
+}
+const generateDummyFoundItem = (type: ItemType, id: string) => {
+    if (type === "video")  {
+        return {
+            id: {
+                kind: "mockedKind",
+                videoId: id,
+            },
+            etag: "mockedEtag",
+            title: "Dummy Video Title",
+            contentDetails: {
+                duration: "dummyDuration",
+                aspectRation: "dummyAspect"
+            }
+        } as FoundVideo;
+    }
+
+    if (type === "playlist") {
+        return {
+            kind: "mockedKind",
+            etag: "mockedEtag",
+            id: {
+                kind: "mockedKind",
+                playlistId: id, 
+            }  
+        } as FoundPlayList;
+    }
+
+    if (type === "channel") {
+        return  {
+            kind: "mockedKind",
+            etag: "mockedEtag",
+            id: {
+                kind: "mockedKind",
+                channelId: id, 
+            }  
+        } as FoundChannel;
+    }
+
+    throw new Error(); // should be unreachable 
+}
+
+const YoutubeForm = (props: YoutubeProps) => {
+    async function getAllDetails (foundItems: FoundItems, mocked: boolean) {
+        console.log({foundItems:foundItems,mocked:mocked});
+
         if("playlistId" in foundItems[0].id) {
-            return await getAllPlaylistDetailes(foundItems as FoundPlayList[]);
+            return await getAllPlaylistDetailes(foundItems as FoundPlayList[], mocked);
         }
 
         if("channelId" in foundItems[0].id) {
-            return await getAllChannelDetails(foundItems as FoundChannel[]);
+            return await getAllChannelDetails(foundItems as FoundChannel[], mocked);
         }
     
         if("videoId" in foundItems[0].id) {
-            return await getAllVideoDetailes(foundItems as FoundVideo[]);
+            return await getAllVideoDetailes(foundItems as FoundVideo[], mocked);
         }
         throw new Error();
     }
 
-    async function requestAll (URLs: string[]) {
+    async function requestAll (URLs: string[], mocked: boolean) {
+        if (mocked) {
+            console.log({quenchedURLs: URLs});
+            const videos: VideoResponse[]=[];
+            for (let i = 0; i < URLs.length; i++) {
+                const video = generateDummyDetail(URLs[i],i); 
+                    videos.push(video as VideoResponse);
+            }
+            return Promise.resolve(videos);
+        }
         return await Promise.all( //FIXME handle non-fixed length! particularly 4 or less length may result in an error
             [
                 fetch(URLs[0]).then(res=>res.json()),
@@ -196,10 +430,10 @@ const YoutubeForm = (props: YoutubeProps) => {
         )
     }
 
-    async function getAllChannelDetails(foundChannels: FoundChannel[]) {
+    async function getAllChannelDetails(foundChannels: FoundChannel[], mocked: boolean) {
         const requestURLs = foundChannels.map(channel => getChannelEndPoint + channel.id.channelId);
         const snippets: BrandedSnippet[] = [];
-        return await requestAll(requestURLs)
+        return await requestAll(requestURLs, mocked)
             .then(responses => {
                 const castResse = (responses as unknown as VideoResponse[]);
                 const channelReses: VideoResponse[] = [];
@@ -216,37 +450,37 @@ const YoutubeForm = (props: YoutubeProps) => {
         })
     }
 
-    async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[]) {
+    async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[], mocked: boolean) {
         const requestURLs = foundPlaylists.map(playlist => getPlaylistEndPoint + playlist.id.playlistId);
         const snippets: BrandedSnippet[] = [];
-        return await requestAll(requestURLs)
-        .then(responses => {
-                const castReses = (responses as unknown as VideoResponse[]);
-                const videoReses: VideoResponse[] = [];
-                for(let i =0; i < responses.length; i++) {
-                    videoReses.push(castReses[i]);
+        return await requestAll(requestURLs, mocked) //TODO change when mocked
+            .then(responses => {
+                    const castReses = (responses as unknown as VideoResponse[]);
+                    const videoReses: VideoResponse[] = [];
+                    for(let i =0; i < responses.length; i++) {
+                        videoReses.push(castReses[i]);
+                    }
+                    return videoReses;
+            })
+            .then(detailedVideos => {
+                for (let i = 0; i < detailedVideos.length; i++) {
+
+                    // TODO length check (normally items' length should be just 1)
+
+                    snippets.push({...detailedVideos[i].items[0].snippet, _brand: "playlist"});
                 }
-                return videoReses;
-        })
-        .then(detailedVideos => {
-            for (let i = 0; i < detailedVideos.length; i++) {
-
-                // TODO length check (normally items' length should be just 1)
-
-                snippets.push({...detailedVideos[i].items[0].snippet, _brand: "playlist"});
-            }
-        })
-        .then(() => snippets);
+            })
+            .then(() => snippets);
     };
 
     /** 
      * Call a Youtube API multiple times to translate the video ids to detailed information \
      * FIXME: this function currently calls the API exactly five times 
     */
-    async function getAllVideoDetailes (foundVideos: FoundVideo[]) {
+    async function getAllVideoDetailes (foundVideos: FoundVideo[], mocked: boolean) {
         const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
         const snippets: BrandedSnippet[] = [];
-        return await requestAll(requestURLs)
+        return await requestAll(requestURLs, mocked) //TODO change when mocked
         .then(responses => {
                 const castReses = (responses as unknown as VideoResponse[]);
                 const videoReses:VideoResponse[] = [];
@@ -257,6 +491,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         })
         .then(detailedVideos => {
             for (let i = 0; i < detailedVideos.length; i++) {
+                console.log({detailedVideos:detailedVideos})
 
                 // TODO length check (normally items' length should be just 1)
 
@@ -313,7 +548,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         setPreviousPageToken(tokens.prevPageToken);
     }
 
-    const getItems = (e: React.FormEvent<HTMLFormElement>) => { //TODO rename
+    const getItems = (e: React.FormEvent<HTMLFormElement>) => {
         console.log(searchItem);
         console.log({pageDirection:pageDirection, nextPageToken:nextPageToken,previousPageToken:previousPageToken});
         e.preventDefault();
@@ -322,11 +557,6 @@ const YoutubeForm = (props: YoutubeProps) => {
             nextPageToken: undefined,
             prevPageToken: undefined
         };
-
-        if (gateKeeper) {
-            alert("under construction");
-            return tokens; 
-        }
 
         if (lastSearchItem && (lastSearchItem !== searchItem)) {
             // these tokens are no longer valid
@@ -344,9 +574,13 @@ const YoutubeForm = (props: YoutubeProps) => {
                 pageDirection === "previous"?
                         getAnotherPageSearchEndPoint + previousPageToken:
                         getAnotherPageSearchEndPoint + nextPageToken;
-        
-        fetch(searchURL)
-            .then(res =>  res.json())
+
+        // mocking...
+        const searchResultPromise: Promise<any> = gateKeeper? 
+                Promise.resolve(getDummySearchResponse(searchItem, 1, searchURL)):
+                fetch(searchURL).then(res=>res.json);
+
+        searchResultPromise
             .then(json => {
                 console.log(json);
                 const searchResponse: SearchResponse = json as unknown as SearchResponse;
@@ -364,37 +598,20 @@ const YoutubeForm = (props: YoutubeProps) => {
                 setPreviousPageToken(undefined);
 
                 if (searchResponse.nextPageToken) {
-                    // nextPageToken = searchResponse.nextPageToken;
                     setNextPageToken(searchResponse.nextPageToken);
                     tokens.nextPageToken = searchResponse.nextPageToken;
                 }
 
                 if (searchResponse.prevPageToken) {
-                    // previousPageToken = searchResponse.prevPageToken;
                     setPreviousPageToken(searchResponse.prevPageToken);
                     tokens.prevPageToken = searchResponse.prevPageToken;
-                }
+                }     
 
-                // TODO resolve lengthy if statements
-                // TODO don't these states inadvertently remain old tokens after new search?
-                // TODO judge the pageToken type (video, channel or playlist)
-                // if ((json as unknown as SearchResponse).nextPageToken){
-
-                //     setNextPageToken(//TODO remove!
-                //         (json as unknown as SearchResponse).nextPageToken 
-                //     )
-                //     // foundVideos
-                // }
-                // if ((json as unknown as SearchResponse).prevPageToken){
-                //     setPreviousPageToken(//TODO remove!
-                //         (json as unknown as SearchResponse).prevPageToken
-                //     )
-                // }
                 return foundVideos;
             })
-            .then(videos => getAllDetails(videos))
+            .then(videos => getAllDetails(videos, gateKeeper))
             .then(snippets => {
-                if (snippets[0]._brand === "video") { //this and following lines expect that all snippets share a brand
+                if (snippets[0]._brand === "video") { // this and following lines expect that all snippets share a brand
                     setVideoResult(
                         {
                             snippets: snippets,
