@@ -277,6 +277,7 @@ const generateDummyDetail = (URL: string, index: number) => {
 const dummyTokens = ["DUMMY1","DUMMY2","DUMMY3","DUMMY4","DUMMY5","DUMMY6","DUMMY7","DUMMY8","DUMMY9","DUMMY10"];
 
 // FIXME very unstable yet
+/** get the two dummy tokens just before and after one */
 const getDummyTokenPair = (oldToken: string | undefined) => {
 
     if (oldToken === undefined) { // TODO to rely on explicit undefined is safe?
@@ -288,7 +289,7 @@ const getDummyTokenPair = (oldToken: string | undefined) => {
     const currentIndex = dummyTokens.findIndex(token => token === oldToken);
 
     if (currentIndex === undefined) {
-        throw new Error("invalid dummy token");
+        throw new Error("invalid dummy token (if you don't have a token yet, just use undefined)");
     }
 
     if (currentIndex === 0) {
@@ -307,11 +308,11 @@ const getDummyTokenPair = (oldToken: string | undefined) => {
         nextPageToken: dummyTokens[currentIndex-1],
         prevPageToken: dummyTokens[currentIndex+1]
     } as PageTokenPair;
-    
-
 }
 
-const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => { //TODO any
+// FIXME to get tokens is unstable
+/** generate a dummy search result having 5 items and token(s) */
+const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => {
 
     let items: FoundItems;
     if (type === "video") {
@@ -329,8 +330,6 @@ const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => 
             wrappedToken[0]:
             undefined;
 
-    console.log({URL:URL,wrappedToken:wrappedToken})
-
     const tokenPair = getDummyTokenPair(oldToken);
             
     return {
@@ -341,15 +340,17 @@ const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => 
             totalResults: 123456,
             resultsPerPage: 5
         },
-        items: items!,
+        items: items!, // it cannot failed to be initialized, because all types are covered above
         nextPageToken: tokenPair.nextPageToken,
         prevPageToken: tokenPair.prevPageToken
     } as SearchResponse;
 }
+
 const generateDummyIds = (type: ItemType, suffix: number) => {
     const numbers = [11111,22222,33333,44444,55555];
     return numbers.map(number => number+ type + suffix);
 }
+
 const generateDummyFoundItem = (type: ItemType, id: string) => {
     if (type === "video")  {
         return {
@@ -393,8 +394,6 @@ const generateDummyFoundItem = (type: ItemType, id: string) => {
 
 const YoutubeForm = (props: YoutubeProps) => {
     async function getAllDetails (foundItems: FoundItems, mocked: boolean) {
-        console.log({foundItems:foundItems,mocked:mocked});
-
         if("playlistId" in foundItems[0].id) {
             return await getAllPlaylistDetailes(foundItems as FoundPlayList[], mocked);
         }
@@ -411,7 +410,6 @@ const YoutubeForm = (props: YoutubeProps) => {
 
     async function requestAll (URLs: string[], mocked: boolean) {
         if (mocked) {
-            console.log({quenchedURLs: URLs});
             const videos: VideoResponse[]=[];
             for (let i = 0; i < URLs.length; i++) {
                 const video = generateDummyDetail(URLs[i],i); 
@@ -578,7 +576,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         // mocking...
         const searchResultPromise: Promise<any> = gateKeeper? 
                 Promise.resolve(getDummySearchResponse(searchItem, 1, searchURL)):
-                fetch(searchURL).then(res=>res.json);
+                fetch(searchURL).then(res=>res.json());
 
         searchResultPromise
             .then(json => {
