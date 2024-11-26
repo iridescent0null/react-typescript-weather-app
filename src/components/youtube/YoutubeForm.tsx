@@ -6,7 +6,6 @@ import PlaylistDivision from "./PlaylistDivision"
 
 // TODO implement without thumbnail mode!
 
-// FIXME this form erroneously shares the page token among the three search types!
 // FIXME for some reason we can conduct "Search -> next -> prev -> prev(what?)-> prev -> next" and then face an error (undefined token)
 
 /** object in responses from ~/search API */
@@ -103,8 +102,8 @@ type SearchResponse = {
     items: FoundItems
 }
 
-/** from ~/video API */
-type VideoResponse = {
+/** from ~/video, ~/channel or ~/playlist API. someday it might be diverged*/
+type DetailResponse = {
     kind: string,
     etag: string,
     items: DetailedItem[],
@@ -132,18 +131,12 @@ type PageTokenPair = {
     prevPageToken: string | undefined
 }
 
-interface DetailedResult {
-     snippets: Snippet[]
-     nextPageToken: string | undefined,
-     prevPageToken: string | undefined 
- }
-
 type YoutubeProps = {
     setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
     input: string
 }
 
-const dummyThumbnails = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/"+number+".png");
+const dummyThumbnails = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/" + number + ".png");
 const generateDummyThumbnails = (URL: string) => { //not array like (Thumbnails is a key defined by Youtube)
     return {
         default: {
@@ -158,14 +151,16 @@ const regex = /(?<=https:\/\/www.googleapis.com\/youtube\/v3\/).*\?/
 const regex1 = new RegExp("/(?<=\&id\=/).*\?n/"); // to extract the id (not tested yet)
 const tokenRegex = /(?<=&pageToken=).*/
 
+const deleteEndChara = (str: string) => {
+    return str.substring(0, str.length - 2);
+}
+
 const generateDummyDetail = (URL: string, index: number) => {
     const typeWithSlash = URL.match(regex); //e.g., "[video/]"
-    console.log({URL:URL, index:index,typeWithSlash:typeWithSlash,content:typeWithSlash?typeWithSlash[0]:"null"})
     if (!typeWithSlash) {
         throw new Error();
     }
-    const type = typeWithSlash[0].substring(0,(typeWithSlash[0].length-2)) as ItemType;
-    console.log({type:type})
+    const type = deleteEndChara(typeWithSlash[0]) as ItemType;
 
     if (type === "video") {
         const snippet: Snippet = {
@@ -199,7 +194,7 @@ const generateDummyDetail = (URL: string, index: number) => {
                 totalResults: 12345,
                 resultsPerPage: 5
             }
-        } as VideoResponse;
+        } as DetailResponse;
     }
 
     if (type === "channel") {
@@ -234,7 +229,7 @@ const generateDummyDetail = (URL: string, index: number) => {
                 totalResults: 12345,
                 resultsPerPage: 5
             }
-        } as VideoResponse;
+        } as DetailResponse;
     }
 
     if (type === "playlist") {
@@ -269,20 +264,20 @@ const generateDummyDetail = (URL: string, index: number) => {
                 totalResults: 12345,
                 resultsPerPage: 5
             }
-        } as VideoResponse;
+        } as DetailResponse;
     } 
     return Error("type failed to be retrieved from the URL:" + URL) ;//FIXME implement the other types!     
 }
 
 const dummyTokens = ["DUMMY1","DUMMY2","DUMMY3","DUMMY4","DUMMY5","DUMMY6","DUMMY7","DUMMY8","DUMMY9","DUMMY10"];
 
-// FIXME very unstable yet
 /** get the two dummy tokens just before and after one */
 const getDummyTokenPair = (oldToken: string | undefined) => {
 
     if (oldToken === undefined) { // TODO to rely on explicit undefined is safe?
+        // unknown token is technically 0 index, then the next one is 1, not 0
         return {
-            nextPageToken: dummyTokens[0]
+            nextPageToken: dummyTokens[1]
         } as PageTokenPair;
     }
 
@@ -305,12 +300,11 @@ const getDummyTokenPair = (oldToken: string | undefined) => {
     }
 
     return {
-        nextPageToken: dummyTokens[currentIndex-1],
-        prevPageToken: dummyTokens[currentIndex+1]
+        nextPageToken: dummyTokens[currentIndex + 1],
+        prevPageToken: dummyTokens[currentIndex - 1]
     } as PageTokenPair;
 }
 
-// FIXME to get tokens is unstable
 /** generate a dummy search result having 5 items and token(s) */
 const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => {
 
@@ -340,7 +334,7 @@ const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => 
             totalResults: 123456,
             resultsPerPage: 5
         },
-        items: items!, // it cannot failed to be initialized, because all types are covered above
+        items: items!, // technically it cannot fail to be initialized, because all types are covered above
         nextPageToken: tokenPair.nextPageToken,
         prevPageToken: tokenPair.prevPageToken
     } as SearchResponse;
@@ -410,10 +404,10 @@ const YoutubeForm = (props: YoutubeProps) => {
 
     async function requestAll (URLs: string[], mocked: boolean) {
         if (mocked) {
-            const videos: VideoResponse[]=[];
+            const videos: DetailResponse[]=[];
             for (let i = 0; i < URLs.length; i++) {
                 const video = generateDummyDetail(URLs[i],i); 
-                    videos.push(video as VideoResponse);
+                    videos.push(video as DetailResponse);
             }
             return Promise.resolve(videos);
         }
@@ -428,13 +422,14 @@ const YoutubeForm = (props: YoutubeProps) => {
         )
     }
 
+    // TODO consolidate the three getAllXXXDetails functions if possible
     async function getAllChannelDetails(foundChannels: FoundChannel[], mocked: boolean) {
         const requestURLs = foundChannels.map(channel => getChannelEndPoint + channel.id.channelId);
         const snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked)
             .then(responses => {
-                const castResse = (responses as unknown as VideoResponse[]);
-                const channelReses: VideoResponse[] = [];
+                const castResse = (responses as unknown as DetailResponse[]);
+                const channelReses: DetailResponse[] = [];
                 for(let i = 0; i < castResse.length; i++){
                     channelReses.push(castResse[i]);
                 }
@@ -442,7 +437,7 @@ const YoutubeForm = (props: YoutubeProps) => {
         })
         .then(detailedChannels => {
             for(let i = 0; i < detailedChannels.length; i++) {
-                snippets.push({...detailedChannels[i].items[0].snippet, _brand:"channel"});
+                snippets.push({...detailedChannels[i].items[0].snippet, _brand: "channel"});
             }
             return snippets;
         })
@@ -453,19 +448,19 @@ const YoutubeForm = (props: YoutubeProps) => {
         const snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked) //TODO change when mocked
             .then(responses => {
-                    const castReses = (responses as unknown as VideoResponse[]);
-                    const videoReses: VideoResponse[] = [];
+                    const castReses = (responses as unknown as DetailResponse[]);
+                    const playlistReses: DetailResponse[] = [];
                     for(let i =0; i < responses.length; i++) {
-                        videoReses.push(castReses[i]);
+                        playlistReses.push(castReses[i]);
                     }
-                    return videoReses;
+                    return playlistReses;
             })
-            .then(detailedVideos => {
-                for (let i = 0; i < detailedVideos.length; i++) {
+            .then(detailedPlaylists => {
+                for (let i = 0; i < detailedPlaylists.length; i++) {
 
                     // TODO length check (normally items' length should be just 1)
 
-                    snippets.push({...detailedVideos[i].items[0].snippet, _brand: "playlist"});
+                    snippets.push({...detailedPlaylists[i].items[0].snippet, _brand: "playlist"});
                 }
             })
             .then(() => snippets);
@@ -479,24 +474,23 @@ const YoutubeForm = (props: YoutubeProps) => {
         const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
         const snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked) //TODO change when mocked
-        .then(responses => {
-                const castReses = (responses as unknown as VideoResponse[]);
-                const videoReses:VideoResponse[] = [];
-                for(let i =0; i < responses.length; i++) {
-                    videoReses.push(castReses[i]);
+            .then(responses => {
+                    const castReses = (responses as unknown as DetailResponse[]);
+                    const videoReses: DetailResponse[] = [];
+                    for (let i = 0; i < responses.length; i++) {
+                        videoReses.push(castReses[i]);
+                    }
+                    return videoReses;
+            })
+            .then(detailedVideos => {
+                for (let i = 0; i < detailedVideos.length; i++) {
+
+                    // TODO length check (normally items' length should be just 1)
+
+                    snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
                 }
-                return videoReses;
-        })
-        .then(detailedVideos => {
-            for (let i = 0; i < detailedVideos.length; i++) {
-                console.log({detailedVideos:detailedVideos})
-
-                // TODO length check (normally items' length should be just 1)
-
-                snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
-            }
-        })
-        .then(() => snippets);
+            })
+            .then(() => snippets);
     };
 
     const [searchResult, setSearchResult] = useState<SearchResult>(); // TODO can be removed?
@@ -505,7 +499,6 @@ const YoutubeForm = (props: YoutubeProps) => {
     const [playlistResult, setPlaylistResult] = useState<PlaylistResult>();
     const [nextPageToken, setNextPageToken] = useState<string>();
     const [previousPageToken, setPreviousPageToken] = useState<string>();
-    const [pageDirection,setPageDirection] = useState<PageDirection>("new");
     const [searchItem, setSearchItem] = useState<ItemType>("video");
     const [lastSearchItem, setLastSearchItem] = useState<ItemType | undefined>(undefined);
 
@@ -525,30 +518,27 @@ const YoutubeForm = (props: YoutubeProps) => {
         const itemType = itemTypeStr as unknown as ItemType;
         setSearchItem(itemType);
     }
+
+    //TODO rectify the names of three functions just after next commit
     const getVideosPrev = (e: React.FormEvent<HTMLFormElement>) => {
-        setPageDirection("previous");
-        const tokens = getItems(e);
+        const tokens = getItems(e,"previous");
         setNextPageToken(tokens.nextPageToken); 
         setPreviousPageToken(tokens.prevPageToken);
     }
 
     const getVideosNext = (e: React.FormEvent<HTMLFormElement>) => {
-        setPageDirection("next");
-        const tokens = getItems(e);
+        const tokens = getItems(e,"next");
         setNextPageToken(tokens.nextPageToken); 
         setPreviousPageToken(tokens.prevPageToken);
     }
 
     const getNewVideos = (e: React.FormEvent<HTMLFormElement>) => {
-        setPageDirection("new");
-        const tokens = getItems(e);
+        const tokens = getItems(e,"new");
         setNextPageToken(tokens.nextPageToken); 
         setPreviousPageToken(tokens.prevPageToken);
     }
 
-    const getItems = (e: React.FormEvent<HTMLFormElement>) => {
-        console.log(searchItem);
-        console.log({pageDirection:pageDirection, nextPageToken:nextPageToken,previousPageToken:previousPageToken});
+    const getItems = (e: React.FormEvent<HTMLFormElement>, direction: PageDirection) => { 
         e.preventDefault();
 
         const tokens: PageTokenPair = {
@@ -558,25 +548,20 @@ const YoutubeForm = (props: YoutubeProps) => {
 
         if (lastSearchItem && (lastSearchItem !== searchItem)) {
             // these tokens are no longer valid
-            setNextPageToken(undefined);
-            setPreviousPageToken(undefined);
-            setPageDirection("new");
+            setNextPageToken(undefined); // FIXME treacherous
+            setPreviousPageToken(undefined); // FIXME treacherous
+            direction = "new";
         }
 
-        // for some reason the direction is often erroneously stated as new! therefore complecated judgement is needed...
-        // FIXME detect and rectify the erroneous "new" setting 
-        // FIXME the tokens are unstable when a user push the next and previous buttones incesstantly!n
-
-        const searchURL = (/*(pageDirection === "new") &&*/ !nextPageToken && !previousPageToken)?
+        const searchURL = (direction === "new")?
                 getSearchEndPoint:
-                pageDirection === "previous"?
+                (direction === "previous")?
                         getAnotherPageSearchEndPoint + previousPageToken:
                         getAnotherPageSearchEndPoint + nextPageToken;
 
-        // mocking...
         const searchResultPromise: Promise<any> = gateKeeper? 
-                Promise.resolve(getDummySearchResponse(searchItem, 1, searchURL)):
-                fetch(searchURL).then(res=>res.json());
+                Promise.resolve(getDummySearchResponse(searchItem, 1, searchURL)): // mock
+                fetch(searchURL).then(res=>res.json()); // real
 
         searchResultPromise
             .then(json => {
