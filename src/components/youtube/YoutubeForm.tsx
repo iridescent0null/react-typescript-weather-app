@@ -107,7 +107,7 @@ type DetailResponse = {
     kind: string,
     etag: string,
     items: DetailedItem[],
-    pageInfo: PageInfo
+    pageInfo: PageInfo // ignored. Youtube returns this value in actuality, but in this form the requests are sent with an id then the item number is definitely 1.
 }
 
 type SearchResult = {
@@ -136,6 +136,21 @@ type YoutubeProps = {
     input: string
 }
 
+const generateDetailResponseWithCache = (cachedSnippet: Snippet, URL: string) => {
+    const item: DetailedItem = {
+        kind: "erased",
+        etag: "erased",
+        id: URL.match(idRegex)![0], // FIXME treacherous non null declaration
+        snippet: cachedSnippet
+    }
+
+    return {
+        kind: "erased",
+        etag: "erased",
+        items: [item]
+    } as DetailResponse;
+}
+
 const dummyThumbnails = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/" + number + ".png");
 const generateDummyThumbnails = (URL: string) => { //not array like (Thumbnails is a key defined by Youtube)
     return {
@@ -148,8 +163,8 @@ const generateDummyThumbnails = (URL: string) => { //not array like (Thumbnails 
 }
 
 const regex = /(?<=https:\/\/www.googleapis.com\/youtube\/v3\/).*\?/
-const regex1 = new RegExp("/(?<=\&id\=/).*\?n/"); // to extract the id (not tested yet)
-const tokenRegex = /(?<=&pageToken=).*/
+const idRegex = /(?<=&id=).*/ // expecting the id to be in the end of the URL // FIXME handle the other position
+const tokenRegex = /(?<=&pageToken=).*/ // expecting the token to be in the end of the URL // FIXME handle the other position
 
 const deleteEndChara = (str: string) => {
     return str.substring(0, str.length - 2);
@@ -181,7 +196,7 @@ const generateDummyDetail = (URL: string, index: number) => {
 
         const video: DetailedItem = {
             etag: "dummyEtag",
-            id: "dummyId", //TODO can be extracted from the URL
+            id: URL.match(idRegex)![0], //FIXME treacherous non null
             kind: "dummyKind",
             snippet: snippet
         }
@@ -403,21 +418,35 @@ const YoutubeForm = (props: YoutubeProps) => {
     }
 
     async function requestAll (URLs: string[], mocked: boolean) {
+
+        const cacheResult = new Map<string, Snippet | undefined>();
+        // expecting the URLs share a type...
+        const type = deleteEndChara(URLs[0].match(regex)![0]) as ItemType // FIXME treacherous non null declaration
+
+        URLs.forEach(URL => {
+            const id = URL.match(idRegex)![0]; // FIXME treacherous non null declaration
+            const cache = tryToRetrieveCache(type,id);
+            cacheResult.set(URL,cache);
+        });
+
         if (mocked) {
-            const videos: DetailResponse[]=[];
+            // currently doesn't enjoy the cache
+            const videos: DetailResponse[] = [];
             for (let i = 0; i < URLs.length; i++) {
                 const video = generateDummyDetail(URLs[i],i); 
                     videos.push(video as DetailResponse);
             }
             return Promise.resolve(videos);
         }
+
         return await Promise.all( //FIXME handle non-fixed length! particularly 4 or less length may result in an error
             [
-                fetch(URLs[0]).then(res=>res.json()),
-                fetch(URLs[1]).then(res=>res.json()),
-                fetch(URLs[2]).then(res=>res.json()),
-                fetch(URLs[3]).then(res=>res.json()),
-                fetch(URLs[4]).then(res=>res.json()),
+                // TODO low readability
+                cacheResult.get(URLs[0])? Promise.resolve(generateDetailResponseWithCache(cacheResult.get(URLs[0])!,URLs[0])) : fetch(URLs[0]).then(res=>res.json()),
+                cacheResult.get(URLs[1])? Promise.resolve(generateDetailResponseWithCache(cacheResult.get(URLs[1])!,URLs[1])) : fetch(URLs[1]).then(res=>res.json()),
+                cacheResult.get(URLs[2])? Promise.resolve(generateDetailResponseWithCache(cacheResult.get(URLs[2])!,URLs[2])) : fetch(URLs[2]).then(res=>res.json()),
+                cacheResult.get(URLs[3])? Promise.resolve(generateDetailResponseWithCache(cacheResult.get(URLs[3])!,URLs[3])) : fetch(URLs[3]).then(res=>res.json()),
+                cacheResult.get(URLs[4])? Promise.resolve(generateDetailResponseWithCache(cacheResult.get(URLs[4])!,URLs[4])) : fetch(URLs[4]).then(res=>res.json()),
             ]
         )
     }
@@ -471,10 +500,11 @@ const YoutubeForm = (props: YoutubeProps) => {
      * FIXME: this function currently calls the API exactly five times 
     */
     async function getAllVideoDetailes (foundVideos: FoundVideo[], mocked: boolean) {
-        const requestURLs = foundVideos.map(video => getDetailEndPoint + video.id.videoId);
+        const requestURLs = foundVideos.map(video => getVideoEndPoint + video.id.videoId);
         const snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked) //TODO change when mocked
             .then(responses => {
+                console.log({responses:responses});
                     const castReses = (responses as unknown as DetailResponse[]);
                     const videoReses: DetailResponse[] = [];
                     for (let i = 0; i < responses.length; i++) {
@@ -483,12 +513,15 @@ const YoutubeForm = (props: YoutubeProps) => {
                     return videoReses;
             })
             .then(detailedVideos => {
+                const buffer: DetailedItem[] = [];
                 for (let i = 0; i < detailedVideos.length; i++) {
 
                     // TODO length check (normally items' length should be just 1)
 
                     snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
+                    buffer.push(detailedVideos[i].items[0]);
                 }
+                cacheSnippets("video",buffer);
             })
             .then(() => snippets);
     };
@@ -501,12 +534,55 @@ const YoutubeForm = (props: YoutubeProps) => {
     const [previousPageToken, setPreviousPageToken] = useState<string>();
     const [searchItem, setSearchItem] = useState<ItemType>("video");
     const [lastSearchItem, setLastSearchItem] = useState<ItemType | undefined>(undefined);
+    const [videoSnippetCaches, setVideoSnippetCaches] = useState<Map<string,Snippet>>(new Map<string,Snippet>());
+    const [channelSnippetCaches, setChannelSnippetCaches] = useState<Map<string,Snippet>>(new Map<string,Snippet>());
+    const [playlistSnippetCaches, setPlaylistSnippetCaches] = useState<Map<string,Snippet>>(new Map<string,Snippet>());
 
     const getPlaylistEndPoint = `https://www.googleapis.com/youtube/v3/playlists?key=${Config.youtube.apiKey}&part=snippet&id=`
-    const getDetailEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
+    const getVideoEndPoint = `https://www.googleapis.com/youtube/v3/videos?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getChannelEndPoint =  `https://www.googleapis.com/youtube/v3/channels?key=${Config.youtube.apiKey}&part=snippet&id=`;
     const getSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}`;
     const getAnotherPageSearchEndPoint = `https://www.googleapis.com/youtube/v3/search?key=${Config.youtube.apiKey}&q=${props.input}&type=${searchItem}&pageToken=`;
+
+    const tryToRetrieveCache = (type: ItemType, id: string) => {        
+        return getStore(type).get(id);
+    }
+
+    /**
+     * Save Snippet(s) in the DetailedItem(s) into a cache store. The snippets can be retrieved with Youtube's id \
+     * Note: the cashes won't get available without re-rendering
+     * @param type video, channel or playlist
+     * @param items information given by a Youtube API, like ~/videos
+     */
+    const cacheSnippets = (type: ItemType, items: DetailedItem[]) => { //FIXME function and the second variable name
+        const store = new Map(getStore(type)); // react seems to need to another Map instance to know the update
+        items.forEach(detail => store.set(detail.id,detail.snippet));
+
+        console.log("caching...")
+        console.log(store);
+        
+        if (type === "video") {
+            setVideoSnippetCaches(store);
+            return;
+        }
+        if (type === "channel") {
+            setChannelSnippetCaches(store);
+            return;
+        }
+        if (type === "playlist") {
+            setPlaylistSnippetCaches(store);
+            return;
+        }
+        throw new Error("failure itemType judging in caching");
+    }
+
+    const getStore = (type: string) => {
+        return (type === "video")?
+                videoSnippetCaches:
+                (type === "channel")?
+                        channelSnippetCaches:
+                        playlistSnippetCaches;
+    }
 
     /** when it is true, http request will get quenched */
     const gateKeeper = false;
@@ -565,7 +641,6 @@ const YoutubeForm = (props: YoutubeProps) => {
 
         searchResultPromise
             .then(json => {
-                console.log(json);
                 const searchResponse: SearchResponse = json as unknown as SearchResponse;
                 const foundVideos: FoundItems =  searchResponse.items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
