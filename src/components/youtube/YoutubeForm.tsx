@@ -4,11 +4,9 @@ import VideoDivision from "./VideoDivision"
 import ChannelDivision from "./ChannelDivision"
 import PlaylistDivision from "./PlaylistDivision"
 
-// TODO implement without thumbnail mode!
+// FIXME only video items are enjoying cache (why???)
 
-// FIXME for some reason we can conduct "Search -> next -> prev -> prev(what?)-> prev -> next" and then face an error (undefined token)
-
-/** object in responses from ~/search API */
+/** video object in responses from ~/search API */
 type FoundVideo = { //TODO not exact yet
     id: {
         kind: string,
@@ -21,7 +19,8 @@ type FoundVideo = { //TODO not exact yet
         aspectRation: string
     }
 }
-// TODO consolidate these three FoundXXX types
+
+/** playlist object in responses from ~/search API */
 type FoundPlayList = {
     kind: string,
     etag: string,
@@ -30,6 +29,8 @@ type FoundPlayList = {
         playlistId: string
     }
 }
+
+/** channel object in responses from ~/search API */
 type FoundChannel = {
     kind: string,
     etag: string,
@@ -56,12 +57,19 @@ type Thumbnail = {
     width: number
 }
 
-// apparently it has following keys: default, high, maxres, medium and standard
+/**
+ * Thumbnail sets given by Youtube \
+ * apparently it generally has following thumbnails: default, high, maxres, medium and standard
+ */
 interface Thumbnails {
     default: Thumbnail
+    // the other properties are omitted 
 }
 
-/** portion to describe infos about a video in Youtube API responses */
+/** 
+ * portion to describe info about a video, channel or playlist in Youtube API responses \
+ * Generally it is retrieved by designating an id, not searching Youtube with words
+ */
 type Snippet = {
     categoryId?: string,
     channelId?: string,
@@ -80,12 +88,13 @@ type Snippet = {
 
 type BrandedSnippet = Snippet & {_brand: ItemType}
 
-/** pagenation option (new means to get fresh search result)*/
+/** pagenation option (new means to get fresh search result) */
 type PageDirection = "previous" | "next" | "new";
 
-/** valid options in YouTube search */
-type ItemType = "video" | "channel" | "playlist"; // Currenlty channel and playlist can be sought but displayed
- 
+/** item categories can be found by Youtube search */
+type ItemType = "video" | "channel" | "playlist";
+
+/** info contained in responses from Youtube API, which shows the number of found items */
 type PageInfo = {
     totalResults: number,//number of the videos
     resultsPerPage: number
@@ -102,7 +111,7 @@ type SearchResponse = {
     items: FoundItems
 }
 
-/** from ~/video, ~/channel or ~/playlist API. someday it might be diverged*/
+/** from ~/videos, ~/channels or ~/playlists API. someday it might be diverged */
 type DetailResponse = {
     kind: string,
     etag: string,
@@ -126,16 +135,27 @@ type PlaylistResult = {
     snippets: Snippet[]
 } & PageTokenPair;
 
+/** 
+ * Page tokens from Youtube, which represent a page in a search result \
+ * Note: page numbers are obscured or not handled by Youtube, then we cannot use those.
+ */
 type PageTokenPair = {
     nextPageToken: string | undefined,
     prevPageToken: string | undefined
 }
 
 type YoutubeProps = {
-    setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>,
+    setYoutubeKeyword: React.Dispatch<React.SetStateAction<string>>, //TODO handle multiple keywords
     input: string
 }
 
+/**
+ * Wrap a cache of a snippet to mimic Youtube response. \
+ * etags and kinds are erased because cache stores don't preserve those.
+ * @param cachedSnippet Snippet which was retrieved from a cache store
+ * @param URL URL which expects to get a item from Youtube
+ * @returns 
+ */
 const generateDetailResponseWithCache = (cachedSnippet: Snippet, URL: string) => {
     const item: DetailedItem = {
         kind: "erased",
@@ -151,18 +171,22 @@ const generateDetailResponseWithCache = (cachedSnippet: Snippet, URL: string) =>
     } as DetailResponse;
 }
 
-const dummyThumbnails = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/" + number + ".png");
-const generateDummyThumbnails = (URL: string) => { //not array like (Thumbnails is a key defined by Youtube)
+/** path of dummy thumbnails */
+const dummyThumbnails: readonly string[] = [0,1,2,3,4].map(number =>  "src/assets/thumbnails/mock/" + number + ".png");
+
+/** wrap a path to generate a Thumbnails object which represents 200 * 200 size image */
+const generateDummyThumbnails = (path: string) => { // not array like (Thumbnails is a key defined by Youtube)
     return {
         default: {
             height: 200,
-            url: URL,
+            url: path,
             width: 200
         }
     } as Thumbnails;
 }
 
-const regex = /(?<=https:\/\/www.googleapis.com\/youtube\/v3\/).*\?/
+/** to get a portion like "video/" from request URL */
+const typeSlashRegex = /(?<=https:\/\/www.googleapis.com\/youtube\/v3\/).*\?/
 const idRegex = /(?<=&id=).*/ // expecting the id to be in the end of the URL // FIXME handle the other position
 const tokenRegex = /(?<=&pageToken=).*/ // expecting the token to be in the end of the URL // FIXME handle the other position
 
@@ -171,9 +195,15 @@ const deleteEndChara = (str: string) => {
 }
 
 const generateDummyDetail = (URL: string, index: number) => {
-    const typeWithSlash = URL.match(regex); //e.g., "[video/]"
+    const wrappedId = URL.match(idRegex);
+    if (!wrappedId) {
+        throw new Error("Failure in extracting the item id from the URL"); // should accept and give a dummy id instead?
+    }
+    const id = wrappedId[0];
+
+    const typeWithSlash = URL.match(typeSlashRegex); //e.g., "[video/]"
     if (!typeWithSlash) {
-        throw new Error();
+        throw new Error("Failure in extracting item type from the URL");
     }
     const type = deleteEndChara(typeWithSlash[0]) as ItemType;
 
@@ -192,14 +222,14 @@ const generateDummyDetail = (URL: string, index: number) => {
             publishedAt: new Date(),
             thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
             title: "dummyTitle"
-        }
+        };
 
         const video: DetailedItem = {
             etag: "dummyEtag",
-            id: URL.match(idRegex)![0], //FIXME treacherous non null
+            id: id,
             kind: "dummyKind",
             snippet: snippet
-        }
+        };
 
         return {
             etag: "dummyEtag",
@@ -219,22 +249,22 @@ const generateDummyDetail = (URL: string, index: number) => {
             channelTitle: "dummyChannelId", //TODO is there?
             customUrl: "dummyURL",
             defaultAudioLanguage: "JP",
-            description: "dummy lengthy video description blah blah blah blah blah blah blah",
+            description: "dummy lengthy channel description blah blah blah blah blah blah blah",
             localized:{
-                description: "dummy lengthy video description blah blah blah blah blah blah blah",
+                description: "dummy lengthy channel description blah blah blah blah blah blah blah",
                 title: "dummyTitle"
             },
             publishedAt: new Date(),
             thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
             title: "dummyTitle"
-        }
+        };
 
         const channel: DetailedItem = {
             etag: "dummyEtag",
-            id: "dummyId", //TODO can be extracted from the URL
+            id: id,
             kind: "dummyKind",
             snippet: snippet 
-        } 
+        }; 
 
         return {
             etag: "dummyEtag",
@@ -254,22 +284,22 @@ const generateDummyDetail = (URL: string, index: number) => {
             channelTitle: "dummyChannelId", //TODO is there?
             customUrl: "dummyURL",
             defaultAudioLanguage: "JP",
-            description: "dummy lengthy video description blah blah blah blah blah blah blah",
+            description: "dummy lengthy playlist description blah blah blah blah blah blah blah",
             localized:{
-                description: "dummy lengthy video description blah blah blah blah blah blah blah",
+                description: "dummy lengthy playlist description blah blah blah blah blah blah blah",
                 title: "dummyTitle"
             },
             publishedAt: new Date(),
             thumbnails: generateDummyThumbnails(dummyThumbnails[index]),
             title: "dummyTitle"
-        }
+        };
 
         const playlist: DetailedItem = {
             etag: "dummyEtag",
-            id: "dummyId", //TODO can be extracted from the URL
+            id: id,
             kind: "dummyKind",
             snippet: snippet 
-        } 
+        }; 
 
         return {
             etag: "dummyEtag",
@@ -281,7 +311,7 @@ const generateDummyDetail = (URL: string, index: number) => {
             }
         } as DetailResponse;
     } 
-    return Error("type failed to be retrieved from the URL:" + URL) ;//FIXME implement the other types!     
+    return Error("type failed to be retrieved from the URL:" + URL);     
 }
 
 const dummyTokens = ["DUMMY1","DUMMY2","DUMMY3","DUMMY4","DUMMY5","DUMMY6","DUMMY7","DUMMY8","DUMMY9","DUMMY10"];
@@ -289,8 +319,8 @@ const dummyTokens = ["DUMMY1","DUMMY2","DUMMY3","DUMMY4","DUMMY5","DUMMY6","DUMM
 /** get the two dummy tokens just before and after one */
 const getDummyTokenPair = (oldToken: string | undefined) => {
 
-    if (oldToken === undefined) { // TODO to rely on explicit undefined is safe?
-        // unknown token is technically 0 index, then the next one is 1, not 0
+    if (oldToken === undefined) {
+        // unknown token is technically index 0, then the next one is 1, not 0
         return {
             nextPageToken: dummyTokens[1]
         } as PageTokenPair;
@@ -325,13 +355,13 @@ const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => 
 
     let items: FoundItems;
     if (type === "video") {
-        items = generateDummyIds("video",suffix).map(id => generateDummyFoundItem("video",id) as FoundVideo);
+        items = generateDummyIds("video", suffix).map(id => generateDummyFoundItem("video", id) as FoundVideo);
     }
     if (type === "playlist") {
-        items = generateDummyIds("playlist",suffix).map(id => generateDummyFoundItem("playlist",id) as FoundPlayList);
+        items = generateDummyIds("playlist", suffix).map(id => generateDummyFoundItem("playlist", id) as FoundPlayList);
     }
     if (type === "channel") {
-        items = generateDummyIds("channel",suffix).map(id => generateDummyFoundItem("channel",id) as FoundChannel);
+        items = generateDummyIds("channel", suffix).map(id => generateDummyFoundItem("channel", id) as FoundChannel);
     }
 
     const wrappedToken = URL.match(tokenRegex);
@@ -355,9 +385,10 @@ const getDummySearchResponse = (type: ItemType, suffix: number, URL: string) => 
     } as SearchResponse;
 }
 
+/** (video, 3) => [11111video3, 22222video3...] (5 length) */
 const generateDummyIds = (type: ItemType, suffix: number) => {
-    const numbers = [11111,22222,33333,44444,55555];
-    return numbers.map(number => number+ type + suffix);
+    const numbers = [11111, 22222, 33333, 44444, 55555];
+    return numbers.map(number => number + type + suffix);
 }
 
 const generateDummyFoundItem = (type: ItemType, id: string) => {
@@ -421,7 +452,7 @@ const YoutubeForm = (props: YoutubeProps) => {
 
         const cacheResult = new Map<string, Snippet | undefined>();
         // expecting the URLs share a type...
-        const type = deleteEndChara(URLs[0].match(regex)![0]) as ItemType // FIXME treacherous non null declaration
+        const type = deleteEndChara(URLs[0].match(typeSlashRegex)![0]) as ItemType // FIXME treacherous non null declaration
 
         URLs.forEach(URL => {
             const id = URL.match(idRegex)![0]; // FIXME treacherous non null declaration
@@ -436,6 +467,7 @@ const YoutubeForm = (props: YoutubeProps) => {
                 const video = generateDummyDetail(URLs[i],i); 
                     videos.push(video as DetailResponse);
             }
+            console.log(videos);
             return Promise.resolve(videos);
         }
 
@@ -463,13 +495,13 @@ const YoutubeForm = (props: YoutubeProps) => {
                     channelReses.push(castResse[i]);
                 }
                 return channelReses;
-        })
-        .then(detailedChannels => {
-            for(let i = 0; i < detailedChannels.length; i++) {
-                snippets.push({...detailedChannels[i].items[0].snippet, _brand: "channel"});
-            }
-            return snippets;
-        })
+            })
+            .then(detailedChannels => {
+                for(let i = 0; i < detailedChannels.length; i++) {
+                    snippets.push({...detailedChannels[i].items[0].snippet, _brand: "channel"});
+                }
+                return snippets;
+            })
     }
 
     async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[], mocked: boolean) {
@@ -479,7 +511,7 @@ const YoutubeForm = (props: YoutubeProps) => {
             .then(responses => {
                     const castReses = (responses as unknown as DetailResponse[]);
                     const playlistReses: DetailResponse[] = [];
-                    for(let i =0; i < responses.length; i++) {
+                    for(let i = 0; i < responses.length; i++) {
                         playlistReses.push(castReses[i]);
                     }
                     return playlistReses;
@@ -642,12 +674,12 @@ const YoutubeForm = (props: YoutubeProps) => {
         searchResultPromise
             .then(json => {
                 const searchResponse: SearchResponse = json as unknown as SearchResponse;
-                const foundVideos: FoundItems =  searchResponse.items;
+                const foundItems: FoundItems =  searchResponse.items;
                 const infos = (json as unknown as SearchResponse).pageInfo;
 
                 setSearchResult(
                     {
-                        "items": foundVideos,
+                        "items": foundItems,
                         "total": infos.totalResults
                     }
                 )
@@ -665,11 +697,11 @@ const YoutubeForm = (props: YoutubeProps) => {
                     tokens.prevPageToken = searchResponse.prevPageToken;
                 }     
 
-                return foundVideos;
+                return foundItems;
             })
-            .then(videos => getAllDetails(videos, gateKeeper))
+            .then(items => getAllDetails(items, gateKeeper))
             .then(snippets => {
-                if (snippets[0]._brand === "video") { // this and following lines expect that all snippets share a brand
+                if (snippets[0]._brand === "video") { // this lines and following ones expect that all snippets share a brand
                     setVideoResult(
                         {
                             snippets: snippets,
@@ -705,7 +737,7 @@ const YoutubeForm = (props: YoutubeProps) => {
                     setPlaylistResult(undefined);
                 }
                 setLastSearchItem(snippets[0]._brand);
-                console.log({lastSearchItem: lastSearchItem, searchItem:searchItem})
+                console.log({snippets:snippets})
             })
             .catch(error => console.error(error));
         return tokens;
