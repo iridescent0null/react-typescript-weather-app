@@ -194,6 +194,8 @@ const deleteEndChara = (str: string) => {
     return str.substring(0, str.length - 2);
 }
 
+
+
 const generateDummyDetail = (URL: string, index: number) => {
     const wrappedId = URL.match(idRegex);
     if (!wrappedId) {
@@ -486,43 +488,38 @@ const YoutubeForm = (props: YoutubeProps) => {
     // TODO consolidate the three getAllXXXDetails functions if possible
     async function getAllChannelDetails(foundChannels: FoundChannel[], mocked: boolean) {
         const requestURLs = foundChannels.map(channel => getChannelEndPoint + channel.id.channelId);
-        const snippets: BrandedSnippet[] = [];
+        let snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked)
             .then(responses => {
                 const castResse = (responses as unknown as DetailResponse[]);
                 const channelReses: DetailResponse[] = [];
-                for(let i = 0; i < castResse.length; i++){
+                for (let i = 0; i < responses.length; i++) {
                     channelReses.push(castResse[i]);
                 }
                 return channelReses;
             })
             .then(detailedChannels => {
                 for(let i = 0; i < detailedChannels.length; i++) {
-                    snippets.push({...detailedChannels[i].items[0].snippet, _brand: "channel"});
+                    snippets = extractItemsForScreenAndCache(detailedChannels,"channel");
                 }
-                return snippets;
             })
+            .then(() => snippets);
     }
 
     async function getAllPlaylistDetailes(foundPlaylists: FoundPlayList[], mocked: boolean) {
         const requestURLs = foundPlaylists.map(playlist => getPlaylistEndPoint + playlist.id.playlistId);
-        const snippets: BrandedSnippet[] = [];
-        return await requestAll(requestURLs, mocked) //TODO change when mocked
+        let snippets: BrandedSnippet[] = [];
+        return await requestAll(requestURLs, mocked)
             .then(responses => {
                     const castReses = (responses as unknown as DetailResponse[]);
                     const playlistReses: DetailResponse[] = [];
-                    for(let i = 0; i < responses.length; i++) {
+                    for (let i = 0; i < responses.length; i++) {
                         playlistReses.push(castReses[i]);
                     }
                     return playlistReses;
             })
             .then(detailedPlaylists => {
-                for (let i = 0; i < detailedPlaylists.length; i++) {
-
-                    // TODO length check (normally items' length should be just 1)
-
-                    snippets.push({...detailedPlaylists[i].items[0].snippet, _brand: "playlist"});
-                }
+                snippets = extractItemsForScreenAndCache(detailedPlaylists,"playlist");
             })
             .then(() => snippets);
     };
@@ -533,7 +530,7 @@ const YoutubeForm = (props: YoutubeProps) => {
     */
     async function getAllVideoDetailes (foundVideos: FoundVideo[], mocked: boolean) {
         const requestURLs = foundVideos.map(video => getVideoEndPoint + video.id.videoId);
-        const snippets: BrandedSnippet[] = [];
+        let snippets: BrandedSnippet[] = [];
         return await requestAll(requestURLs, mocked) //TODO change when mocked
             .then(responses => {
                 console.log({responses:responses});
@@ -545,15 +542,7 @@ const YoutubeForm = (props: YoutubeProps) => {
                     return videoReses;
             })
             .then(detailedVideos => {
-                const buffer: DetailedItem[] = [];
-                for (let i = 0; i < detailedVideos.length; i++) {
-
-                    // TODO length check (normally items' length should be just 1)
-
-                    snippets.push({...detailedVideos[i].items[0].snippet,_brand: "video"});
-                    buffer.push(detailedVideos[i].items[0]);
-                }
-                cacheSnippets("video",buffer);
+                snippets = extractItemsForScreenAndCache(detailedVideos,"video");
             })
             .then(() => snippets);
     };
@@ -614,6 +603,23 @@ const YoutubeForm = (props: YoutubeProps) => {
                 (type === "channel")?
                         channelSnippetCaches:
                         playlistSnippetCaches;
+    }
+
+    const extractItemsForScreenAndCache = (details: DetailResponse[], type: ItemType) => {
+        const snippets: BrandedSnippet[] = [];
+        const buffer: DetailedItem[] = [];
+        for (let i = 0; i < details.length; i++) {
+    
+            // TODO length check (normally items' length should be just 1)
+            if (details[i].items.length !== 1 ){
+                throw new Error("invalid item number in DetailResponse" + details);
+            }
+    
+            snippets.push({...details[i].items[0].snippet,_brand: type});
+            buffer.push(details[i].items[0]);
+        }
+        cacheSnippets(type,buffer);
+        return snippets;
     }
 
     /** when it is true, http request will get quenched */
@@ -682,7 +688,7 @@ const YoutubeForm = (props: YoutubeProps) => {
                         "items": foundItems,
                         "total": infos.totalResults
                     }
-                )
+                );
 
                 setNextPageToken(undefined);
                 setPreviousPageToken(undefined);
